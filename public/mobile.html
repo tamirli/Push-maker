@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>שלט שחקן</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="mobile-body">
+
+    <div id="mobile-progress-bar"></div>
+
+    <div id="screen-login" class="mobile-screen active">
+        <img src="logo.svg" alt="Push Maker Logo" style="max-width: 80%; height: auto; margin-bottom: 20px;">
+        <input type="text" id="room-code-input" class="mobile-input" placeholder="קוד חדר (ABCD)"
+            style="text-transform: uppercase;">
+        <button class="mobile-btn" onclick="joinRoom()">הכנס לחדר</button>
+    </div>
+
+    <div id="screen-register" class="mobile-screen">
+        <h2>מי את/ה?</h2>
+        <input type="text" id="nickname" class="mobile-input" placeholder="כינוי">
+        <div class="radio-group" style="margin-top:10px;">
+            <button class="radio-btn" onclick="selectGender('male', this)">זכר</button>
+            <button class="radio-btn" onclick="selectGender('female', this)">נקבה</button>
+            <button class="radio-btn selected" onclick="selectGender('neutral', this)">אחר</button>
+        </div>
+        <input type="text" id="fav-thing" class="mobile-input" placeholder="דבר אהוב">
+        <button class="mobile-btn" onclick="submitRegistration()">מוכן!</button>
+    </div>
+
+    <div id="screen-lobby-wait" class="mobile-screen">
+        <h2>את/ה בפנים!</h2>
+        <p>תסתכל/י על המסך הראשי...</p>
+    </div>
+
+    <div id="screen-write" class="mobile-screen">
+        <h2 id="write-title">שאלה 1/2</h2>
+        <div
+            style="background:#222; padding:8px; border-radius:5px; margin-bottom:5px; color: white; font-size: 1.3em; text-align: center;">
+            <strong id="write-source-text">...</strong>
+        </div>
+        <div style="background:#333; padding:10px; border-radius:5px; margin-bottom:10px; color: white;">
+            <strong id="write-prompt-text">...</strong>
+        </div>
+        <input type="text" id="headline-input" class="mobile-input" placeholder="השלם את הכותרת...">
+        <button class="mobile-btn" onclick="submitHeadline()">שלח</button>
+    </div>
+
+    <div id="screen-vote" class="mobile-screen">
+        <h2>הצבע עכשיו!</h2>
+        <div id="voting-buttons-container"></div>
+    </div>
+
+    <div id="screen-general-wait" class="mobile-screen">
+        <h3 id="wait-msg">המתן...</h3>
+    </div>
+
+    <script>
+        const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+        const socketUrl = isLocal ? "http://localhost:3000" : "https://[YOUR-RENDER-APP-NAME].onrender.com"; // User instructions: Replace with actual Render URL
+        const socket = io(socketUrl);
+        let myGender = 'neutral';
+        let myVoteIndex = -1;
+
+        // --- UUID for Reconnection ---
+        let myUUID = localStorage.getItem('push_maker_uuid');
+        if (!myUUID) {
+            myUUID = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+            localStorage.setItem('push_maker_uuid', myUUID);
+        }
+
+        function showScreen(id) {
+            document.querySelectorAll('.mobile-screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function joinRoom() {
+            const code = document.getElementById('room-code-input').value;
+            if (code) {
+                // Haptics init attempt
+                vibrator.init();
+                // Send Object with UUID
+                socket.emit('player_attempt_join', { code: code, uuid: myUUID });
+            }
+        }
+
+        socket.on('join_success', () => {
+            showScreen('screen-register');
+        });
+
+        socket.on('join_error', (msg) => {
+            alert(msg);
+        });
+
+        // Gender selection logic
+        function selectGender(g, btn) {
+            myGender = g;
+            document.querySelectorAll('.radio-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+        }
+
+        function submitRegistration() {
+            const name = document.getElementById('nickname').value;
+            const fav = document.getElementById('fav-thing').value;
+            if (!name || !fav) return;
+
+            // Init Haptics on this user interaction
+            vibrator.init();
+
+            socket.emit('player_register', {
+                nickname: name,
+                gender: myGender,
+                favThing: fav,
+                uuid: myUUID
+            });
+            showScreen('screen-lobby-wait');
+        }
+
+        // --- Vibration & Haptics ---
+        class VibrationManager {
+            constructor() {
+                this.hasVibrate = "vibrate" in navigator;
+                this.audioCtx = null;
+            }
+
+            init() {
+                if (!this.audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        this.audioCtx = new AudioContext();
+                        if (this.audioCtx.state === 'suspended') {
+                            this.audioCtx.resume();
+                        }
+                    }
+                } else if (this.audioCtx.state === 'suspended') {
+                    this.audioCtx.resume();
+                }
+            }
+
+            trigger(pattern, type) {
+                // 1. Native Vibration
+                if (this.hasVibrate) {
+                    try { navigator.vibrate(pattern); } catch (e) { }
+                }
+
+                // 2. Fallbacks (Visuals)
+                this.playFlash(type);
+
+                // 3. Audio Fallback (if iOS or no vibrate)
+                if (!this.hasVibrate && type !== 'write') {
+                    this.playBlip(type);
+                }
+            }
+
+            playFlash(type) {
+                const body = document.body;
+                body.classList.remove('flash-anim', 'shake-anim');
+                void body.offsetWidth; // trigger reflow
+
+                if (type === 'hurry') {
+                    body.style.animation = 'mobile-flash 0.5s infinite'; // Red flash
+                } else if (type === 'vote') {
+                    body.classList.add('flash-anim'); // White flash
+                } else if (type === 'success') {
+                    body.classList.add('flash-anim'); // Green flash
+                }
+            }
+
+            playBlip(type) {
+                if (!this.audioCtx) return;
+                try {
+                    const osc = this.audioCtx.createOscillator();
+                    const gain = this.audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(this.audioCtx.destination);
+
+                    if (type === 'hurry') {
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(400, this.audioCtx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(100, this.audioCtx.currentTime + 0.3);
+                        gain.gain.setValueAtTime(0.5, this.audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.3);
+                        osc.start();
+                        osc.stop(this.audioCtx.currentTime + 0.3);
+                    } else if (type === 'click') {
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(600, this.audioCtx.currentTime);
+                        gain.gain.setValueAtTime(0.1, this.audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.1);
+                        osc.start();
+                        osc.stop(this.audioCtx.currentTime + 0.1);
+                    } else if (type === 'success') {
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(400, this.audioCtx.currentTime);
+                        osc.frequency.linearRampToValueAtTime(800, this.audioCtx.currentTime + 0.2);
+                        gain.gain.setValueAtTime(0.2, this.audioCtx.currentTime);
+                        gain.gain.linearRampToValueAtTime(0, this.audioCtx.currentTime + 0.5);
+                        osc.start();
+                        osc.stop(this.audioCtx.currentTime + 0.5);
+                    }
+                } catch (e) { console.warn('Audio fallback failed', e); }
+            }
+        }
+
+        const vibrator = new VibrationManager();
+
+        // --- Progress Bar ---
+        function startProgressBar(duration) {
+            const bar = document.getElementById('mobile-progress-bar');
+            if (!bar) return;
+            bar.style.direction = 'ltr';
+            bar.style.transition = 'none';
+            bar.style.width = '100%';
+            if (!duration) return;
+            void bar.offsetWidth;
+            setTimeout(() => {
+                bar.style.transition = `width ${duration}ms linear`;
+                bar.style.width = '0%';
+            }, 50);
+        }
+
+        socket.on('move_to_writing', (data) => {
+            showScreen('screen-write');
+            vibrator.trigger([200], 'write'); // Short pulse
+
+            document.getElementById('write-source-text').textContent = data.source;
+            const promptHTML = data.prompt.replace(/_+/g, '<span style="display:inline-block; border-bottom: 2px solid white; width: 50px; margin: 0 5px; transform: translateY(5px);"></span>');
+            document.getElementById('write-prompt-text').innerHTML = promptHTML;
+
+            document.getElementById('write-title').textContent = `שאלה ${data.questionNum}/3`;
+            document.getElementById('headline-input').value = '';
+            document.getElementById('headline-input').focus();
+
+            // Reset button
+            const btn = document.querySelector('#screen-write .mobile-btn');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = "שלח";
+            }
+            if (data.duration) startProgressBar(data.duration);
+        });
+
+        function submitHeadline() {
+            const text = document.getElementById('headline-input').value;
+            if (!text) return;
+
+            // User Feedback
+            const btn = document.querySelector('#screen-write .mobile-btn');
+            if (btn) {
+                btn.dataset.originalText = btn.innerText;
+                btn.innerText = "בודק...";
+                btn.disabled = true;
+            }
+
+            socket.emit('submit_headline', text);
+        }
+
+        socket.on('submit_error', (msg) => {
+            alert(msg);
+            const btn = document.querySelector('#screen-write .mobile-btn');
+            if (btn) {
+                btn.innerText = "שלח";
+                btn.disabled = false;
+            }
+            document.getElementById('headline-input').focus();
+        });
+
+        socket.on('wait_for_others', () => {
+            showScreen('screen-general-wait');
+            document.getElementById('wait-msg').textContent = 'סיימת הכל! מחכה לכולם...';
+        });
+
+        socket.on('hurry_up', () => {
+            // If waiting, do not vibrate
+            if (document.getElementById('screen-general-wait').classList.contains('active')) return;
+
+            vibrator.trigger([500], 'hurry');
+            document.body.style.border = "5px solid red";
+            setTimeout(() => document.body.style.border = "none", 1000);
+        });
+
+        socket.on('move_to_voting_screen', (data) => {
+            showScreen('screen-vote');
+            vibrator.trigger([400, 100, 400], 'vote');
+            if (data.duration) startProgressBar(data.duration);
+
+            const container = document.getElementById('voting-buttons-container');
+            container.innerHTML = '';
+
+            if (data.options) {
+                data.options.forEach((opt, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'mobile-btn';
+                    btn.style.marginTop = "10px";
+
+                    if (opt.playerId === socket.id) {
+                        btn.textContent = opt.text;
+                        btn.disabled = true;
+                        btn.classList.add('disabled-own-answer');
+                        btn.style.opacity = "0.5";
+                        btn.style.cursor = "not-allowed";
+                        btn.style.backgroundColor = "#555";
+                        btn.innerText += " (שלך)";
+                    } else {
+                        btn.textContent = opt.text;
+                        btn.onclick = () => {
+                            socket.emit('submit_vote', idx);
+                            myVoteIndex = idx; // Track for haptic success
+                            vibrator.playBlip('click');
+                            showScreen('screen-general-wait');
+                        };
+                    }
+                    container.appendChild(btn);
+                });
+            }
+        });
+
+        socket.on('truth_revealed_haptic', (data) => {
+            // No vibration requested for passive events
+        });
+
+        socket.on('kick_player', () => {
+            alert('המשחק אותחל. נא להיכנס מחדש.');
+            localStorage.removeItem('push_maker_uuid'); // Force new identity just in case
+            location.reload();
+        });
+    </script>
+</body>
+
+</html>

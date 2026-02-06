@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>טבלת מובילים - בדיקה</title>
+    <!-- Custom Fonts -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="host-body">
+
+    <div class="header">
+        <div class="header-top-border"></div>
+        <div class="header-content">
+            <div class="logo">פייק מייקר</div>
+            <div></div>
+        </div>
+        <div class="marquee-container">
+            <div class="marquee-content" id="header-marquee">
+                טקסט רץ * טקסט רץ * ברוכים הבאים למשחק * טקסט רץ * טקסט רץ *
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- Right Column -->
+        <div class="col-side" id="col-right">
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-yellow);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 1</div>
+                    <div class="player-role">כתב לענייני חתולים</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-green);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 3</div>
+                    <div class="player-role">כתב לענייני שינה</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-yellow);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 5</div>
+                    <div class="player-role">פרשן לענייני כלום</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Column (Leaderboard) -->
+        <div class="col-center" id="game-stage">
+            <h2 class="phase-title">המובילים!</h2>
+
+            <div style="width: 60%;">
+                <div
+                    style="display:flex; justify-content:space-between; background:#f9f9f9; padding:10px; border-bottom:1px solid #ddd; font-size:1.5rem; font-weight:bold;">
+                    <span>#1 שחקן 3</span>
+                    <span style="color:var(--color-purple)">1500</span>
+                </div>
+                <div
+                    style="display:flex; justify-content:space-between; background:#f9f9f9; padding:10px; border-bottom:1px solid #ddd; font-size:1.5rem; font-weight:bold;">
+                    <span>#2 שחקן 2</span>
+                    <span style="color:var(--color-purple)">1200</span>
+                </div>
+                <div
+                    style="display:flex; justify-content:space-between; background:#f9f9f9; padding:10px; border-bottom:1px solid #ddd; font-size:1.5rem; font-weight:bold;">
+                    <span>#3 שחקן 1</span>
+                    <span style="color:var(--color-purple)">950</span>
+                </div>
+                <div
+                    style="display:flex; justify-content:space-between; background:#f9f9f9; padding:10px; border-bottom:1px solid #ddd; font-size:1.5rem; font-weight:bold;">
+                    <span>#4 שחקן 5</span>
+                    <span style="color:var(--color-purple)">800</span>
+                </div>
+                <div
+                    style="display:flex; justify-content:space-between; background:#f9f9f9; padding:10px; border-bottom:1px solid #ddd; font-size:1.5rem; font-weight:bold;">
+                    <span>#5 שחקן 4</span>
+                    <span style="color:var(--color-purple)">650</span>
+                </div>
+            </div>
+
+            <button class="action-btn">סיבוב חדש</button>
+        </div>
+
+        <!-- Left Column -->
+        <div class="col-side" id="col-left">
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-pink);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 2</div>
+                    <div class="player-role">פרשן בכיר</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-purple);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 4</div>
+                    <div class="player-role">כתב צבאי</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="progress-bar" id="footer-progress" style="width: 100%;"></div>
+    </div>
+
+</body>
+
+</html>

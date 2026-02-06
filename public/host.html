@@ -1,0 +1,1993 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>מסך ראשי - פייק מייקר</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Custom Fonts -->
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles_theme.css">
+</head>
+
+<body class="host-body">
+
+    <div class="header">
+        <div class="header-top-border"></div>
+        <div class="header-content">
+            <div class="logo">פייק מייקר</div> <!-- Logo Top Right -->
+
+            <!-- Header Info Widget (Top Left) -->
+            <!-- Header Info Widget (Top Left) -->
+            <div class="header-info-widget" id="header-info">
+                <!-- Right Column: Time & Weather -->
+                <div class="header-column col-time-weather">
+                    <div class="header-time" id="clock-time">--:--</div>
+                    <div class="header-weather" id="weather-info">טוען מזג אוויר...</div>
+                </div>
+
+                <!-- Left Column: Dates -->
+                <div class="header-column col-dates">
+                    <div class="header-date-gregorian" id="date-gregorian">--/--/----</div>
+                    <div class="header-date-hebrew" id="date-hebrew">...</div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Header Info Logic
+            async function updateHeaderInfo() {
+                const now = new Date();
+
+                // Time
+                document.getElementById('clock-time').textContent = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+
+                // Gregorian Date
+                document.getElementById('date-gregorian').textContent = now.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+                // Hebrew Date (Fetch from Hebcal API for reliability)
+                try {
+                    const y = now.getFullYear();
+                    const m = now.getMonth() + 1;
+                    const d = now.getDate();
+                    // Hebcal Converter API
+                    const response = await fetch(`https://www.hebcal.com/converter?cfg=json&gy=${y}&gm=${m}&gd=${d}&g2h=1`);
+                    const data = await response.json();
+                    if (data && data.hebrew) {
+                        document.getElementById('date-hebrew').textContent = data.hebrew;
+                    }
+                } catch (e) {
+                    console.error("Hebrew date fetch failed", e);
+                    // Fallback
+                    const options = { calendar: 'hebrew', day: 'numeric', month: 'long', year: 'numeric' };
+                    document.getElementById('date-hebrew').textContent = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', options).format(now);
+                }
+            }
+
+            async function fetchWeather() {
+                try {
+                    // Open-Meteo API for Jerusalem
+                    const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=31.7683&longitude=35.2137&current=temperature_2m&timezone=auto');
+                    const data = await response.json();
+
+                    if (data && data.current) {
+                        const temp = Math.round(data.current.temperature_2m);
+                        document.getElementById('weather-info').textContent = `ירושלים: ${temp}°C`;
+                    }
+                } catch (e) {
+                    console.error("Weather fetch failed", e);
+                    document.getElementById('weather-info').textContent = "ירושלים: --°C";
+                }
+            }
+
+            // Init
+            updateHeaderInfo();
+            setInterval(updateHeaderInfo, 60000); // Update every minute
+            fetchWeather();
+            setInterval(fetchWeather, 3600000); // Update weather every hour
+        </script>
+    </div>
+    <div class="marquee-container">
+        <div class="marquee-content" id="header-marquee">
+            ברוכים הבאים * ברוכים הבאים * ברוכים הבאים * ברוכים הבאים * ברוכים הבאים * ברוכים הבאים * ברוכים הבאים *
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- Right Column (Player List 1) -->
+        <div class="col-side" id="col-right">
+            <!-- Slots will be injected here -->
+        </div>
+
+        <!-- Center Column (Game Stage) -->
+        <div class="col-center" id="game-stage">
+            <!-- Default Lobby Content -->
+            <div class="lobby-media-placeholder">
+                <!-- Could be a logo or video -->
+            </div>
+
+            <div class="lobby-content-right">
+                <div class="room-code-badge">ABCD</div>
+                <h1 class="game-title">פוש מייקר</h1>
+                <div class="join-url" id="join-url-display">טוען כתובת...</div>
+                <div id="qrcode" style="margin-top: 20px; background: white; padding: 10px; border-radius: 10px;"></div>
+                <button class="action-btn" id="start-game-btn" onclick="startGame()" disabled>התחל משחק</button>
+            </div>
+        </div>
+
+
+    </div>
+
+    <div class="footer">
+        <div class="progress-bar" id="footer-progress"></div>
+    </div>
+
+    <script>
+        const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+        const socketUrl = isLocal ? "http://localhost:3000" : "https://[YOUR-RENDER-APP-NAME].onrender.com"; // User instructions: Replace with actual Render URL
+        const socket = io(socketUrl);
+        socket.emit('host_connect');
+
+        // --- Audio Manager ---
+        class AudioController {
+            constructor() {
+                this.sounds = {};
+                this.bgm = null;
+                this.isDucking = false;
+
+                const soundMap = {
+                    'transition': 'SFX/Transition Swoosh.wav',
+                    'submission': 'SFX/Submission Ding.wav',
+                    'clock': 'SFX/Ticking Clock.wav',
+                    'drumroll': 'SFX/Suspenseful Drumroll.wav',
+                    'wrong': 'SFX/Wrong Answer.wav',
+                    'pop': 'SFX/Name Pop.wav',
+                    'jackpot': 'SFX/Jackpot.wav',
+                    'rolling': 'SFX/Rolling Score.wav',
+                    'whiz': 'SFX/Whiz.wav',
+                    // Host Voice (Variations)
+                    'all_right': ['Host_voice/All right.wav', 'Host_voice/All right 2.wav', 'Host_voice/All right 3.wav'],
+                    'all_wrong': ['Host_voice/All wrong.wav', 'Host_voice/All wrong 2.wav', 'Host_voice/All wrong 3.wav'],
+                    'good_lie': ['Host_voice/Good lie.wav', 'Host_voice/Good lie 2.wav', 'Host_voice/Good lie 3.wav'],
+                    'hurry_up': ['Host_voice/hurry up.wav', 'Host_voice/hurry up 2.wav', 'Host_voice/hurry up 3.wav'],
+                    'underdog': ['Host_voice/Under dog win.wav', 'Host_voice/Under dog win 2.wav', 'Host_voice/Under dog win 3.wav'],
+                    'round_1': 'round 1.mp3',
+                    'round_2': 'round 2.mp3',
+                    'round_3': 'round 3.mp3',
+                    'round_4': 'round 4.mp3'
+                };
+
+                for (const [key, src] of Object.entries(soundMap)) {
+                    if (Array.isArray(src)) {
+                        this.sounds[key] = src.map(s => new Audio(s));
+                    } else {
+                        this.sounds[key] = new Audio(src);
+                    }
+                }
+
+                // Loop overrides
+                // Note: looping sounds must not be arrays in this logic
+                this.sounds['clock'].loop = true;
+                this.sounds['rolling'].loop = true;
+            }
+
+            setBGM(audioObj) {
+                this.bgm = audioObj;
+            }
+
+            play(key) {
+                let sound = this.sounds[key];
+                if (!sound) return;
+
+                // Handle Random Variations
+                if (Array.isArray(sound)) {
+                    const randIndex = Math.floor(Math.random() * sound.length);
+                    sound = sound[randIndex];
+                }
+
+                if (key === 'pop') {
+                    // Force overlap for 'pop'
+                    const clone = sound.cloneNode();
+                    clone.volume = sound.volume;
+                    clone.play().catch(e => console.warn('Audio play failed', e));
+                    return;
+                }
+
+                if (key === 'wrong' || key === 'jackpot' || key === 'all_right' || key === 'all_wrong' || key === 'good_lie' || key === 'underdog') {
+                    this.duckBGM();
+                }
+
+                // For looping sounds, ensure we don't restart if already playing? 
+                // Actually for 'rolling' we might want to restart or just ensure it is playing.
+                // For one-shots, reset time.
+                if (!sound.loop) {
+                    sound.currentTime = 0;
+                }
+
+                sound.play().catch(e => console.warn('Audio play failed', e));
+            }
+
+            playTTS(url, onEndCallback) {
+                if (!url) {
+                    if (onEndCallback) onEndCallback();
+                    return;
+                }
+
+                // Stop existing TTS
+                if (this.currentTTS) {
+                    this.currentTTS.pause();
+                    this.currentTTS = null;
+                }
+
+                this.duckBGM();
+
+                const audio = new Audio(url);
+                this.currentTTS = audio;
+
+                audio.onended = () => {
+                    if (this.bgm) this.animateVolume(this.bgm, 0.3, 1000, () => { this.isDucking = false; });
+                    this.currentTTS = null;
+                    if (onEndCallback) onEndCallback();
+                };
+
+                audio.onerror = (e) => {
+                    console.error('TTS Audio Error:', e, url);
+                    if (this.bgm) this.animateVolume(this.bgm, 0.3, 500, () => { this.isDucking = false; });
+                    this.currentTTS = null;
+                    if (onEndCallback) onEndCallback();
+                };
+
+                audio.play().catch(e => {
+                    console.warn('TTS play failed', e);
+                    // If play fails, we might not get onerror, so ensure callback
+                    if (this.currentTTS === audio) { // Only if still current
+                        if (onEndCallback) onEndCallback();
+                        this.currentTTS = null;
+                    }
+                });
+            }
+
+            stop(key) {
+                if (this.sounds[key]) {
+                    this.sounds[key].pause();
+                    this.sounds[key].currentTime = 0;
+                }
+            }
+
+            duckBGM() {
+                if (!this.bgm || this.isDucking) return;
+                this.isDucking = true;
+                const originalVol = 0.3; // As set in startIntroSequence
+                const duckVol = 0.05;
+
+                this.animateVolume(this.bgm, duckVol, 500);
+
+                // Restore after 3 seconds (approx length of reaction clips)
+                setTimeout(() => {
+                    this.animateVolume(this.bgm, originalVol, 1000, () => {
+                        this.isDucking = false;
+                    });
+                }, 3000);
+            }
+
+            duckBGMManual(enable) {
+                if (!this.bgm) return;
+                const originalVol = 0.3;
+                const duckVol = 0.09; // ~30% of original
+
+                if (enable) {
+                    if (this.isDucking) return;
+                    this.isDucking = true;
+                    this.animateVolume(this.bgm, duckVol, 500);
+                } else {
+                    if (!this.isDucking) return;
+                    // Only restore if we are the ones ducking? 
+                    // Simple boolean toggle is risky if multiple sources, but for now we only have Facts and short SFX.
+                    // Facts are long, SFX are short.
+                    this.animateVolume(this.bgm, originalVol, 500, () => {
+                        this.isDucking = false;
+                    });
+                }
+            }
+
+            animateVolume(audio, target, duration, callback) {
+                const start = audio.volume;
+                const change = target - start;
+                const startTime = performance.now();
+
+                const step = (time) => {
+                    const elapsed = time - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    audio.volume = start + (change * progress);
+
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else if (callback) {
+                        callback();
+                    }
+                };
+                requestAnimationFrame(step);
+            }
+
+            playRoundIntro(roundNum) {
+                return new Promise((resolve) => {
+                    const key = `round_${roundNum}`;
+                    if (!this.sounds[key]) {
+                        console.warn(`Missing audio for round ${roundNum}`);
+                        resolve();
+                        return;
+                    }
+
+                    const sound = this.sounds[key];
+                    if (this.bgm) this.duckBGMManual(true);
+
+                    sound.currentTime = 0;
+                    sound.volume = 1.0;
+
+                    const onEnd = () => {
+                        // Restore BGM
+                        if (this.bgm) this.duckBGMManual(false);
+                        // Buffer 1s
+                        setTimeout(resolve, 1000);
+                        sound.removeEventListener('ended', onEnd);
+                    };
+
+                    sound.addEventListener('ended', onEnd);
+                    sound.play().catch(e => {
+                        console.error("Round intro play failed", e);
+                        onEnd(); // Resolve anyway
+                    });
+                });
+            }
+        }
+
+        class FactManager {
+            constructor(audioCtrl) {
+                this.audioCtrl = audioCtrl;
+                this.availableFacts = [];
+                // Initialize pool 1..11
+                for (let i = 1; i <= 11; i++) this.availableFacts.push(i);
+                this.shuffle(this.availableFacts);
+
+                this.timer = null;
+                this.interval = null;
+                this.currentAudio = null;
+            }
+
+            shuffle(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+            start() {
+                this.stop();
+                console.log("FactManager started");
+                // Initial 5s delay
+                this.timer = setTimeout(() => {
+                    this.playNextFact();
+                }, 5000);
+            }
+
+            playNextFact() {
+                if (this.availableFacts.length === 0) {
+                    console.log("FactManager: No more facts.");
+                    return;
+                }
+
+                // If stopped externally or active
+                if (this.currentAudio && !this.currentAudio.paused) return;
+
+                const factId = this.availableFacts.pop();
+                const filename = `Facts/fact ${factId}.mp3`;
+                console.log("Playing fact:", filename);
+
+                this.audioCtrl.duckBGMManual(true);
+
+                this.currentAudio = new Audio(filename);
+
+                this.currentAudio.onended = () => {
+                    console.log("Fact ended:", filename);
+                    this.audioCtrl.duckBGMManual(false);
+                    this.currentAudio = null;
+
+                    // Wait 10 seconds BEFORE the next one
+                    this.timer = setTimeout(() => {
+                        this.playNextFact();
+                    }, 10000);
+                };
+
+                this.currentAudio.onerror = (e) => {
+                    console.error("Fact error:", e);
+                    this.audioCtrl.duckBGMManual(false);
+                    this.currentAudio = null;
+                    // Retry or skip after delay? Let's wait 10s anyway
+                    this.timer = setTimeout(() => {
+                        this.playNextFact();
+                    }, 10000);
+                };
+
+                this.currentAudio.play().catch(e => console.warn("Fact play failed", e));
+            }
+
+            stop() {
+                if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+                if (this.interval) { clearInterval(this.interval); this.interval = null; }
+
+                if (this.currentAudio) {
+                    const audio = this.currentAudio;
+                    this.currentAudio = null; // Detach
+
+                    // Prevent callbacks
+                    audio.onended = null;
+                    audio.onerror = null;
+
+                    // Quick fade out
+                    this.audioCtrl.animateVolume(audio, 0, 500, () => {
+                        audio.pause();
+                    });
+
+                    // Restore BGM immediately
+                    this.audioCtrl.duckBGMManual(false);
+                }
+            }
+        }
+
+        // --- Avatars ---
+        const AVATAR_SVGS = [
+            `<svg width="49" height="64" viewBox="0 0 49 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 57C2.5 57 2.50005 35 24.5 35C45.509 35.991 46.5 57 46.5 57" stroke="white" stroke-width="5"/><circle cx="24.5" cy="19" r="16.5" stroke="white" stroke-width="5"/><circle cx="16.5" cy="22" r="2.5" stroke="white" stroke-width="3"/><circle cx="32.5" cy="22" r="2.5" stroke="white" stroke-width="3"/><path d="M21.5 41.75L18 35.5H30L27 41.75L30 51.5L24 59.5L18.5 51.5L21.5 41.75Z" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="68" height="64" viewBox="0 0 68 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.4995 57C11.4995 57 11.4996 35 33.4995 35C54.5085 35.991 55.4995 57 55.4995 57" stroke="white" stroke-width="5"/><circle cx="33.4995" cy="19" r="16.5" stroke="white" stroke-width="5"/><path d="M13.1474 14.4862C5.14776 11.9861 1.15942 19.6368 2.90393 25.8116C4.64844 31.9863 12.6468 33.9862 17.1468 30.9862C20.7468 28.5862 29.6468 24.9862 33.6468 23.4862" stroke="white" stroke-width="5"/><path d="M54.148 14.9725C62.1476 12.4725 66.136 20.1231 64.3915 26.2979C62.647 32.4727 54.6486 34.4725 50.1486 31.4725C46.5486 29.0725 37.6486 25.4725 33.6486 23.9725" stroke="white" stroke-width="5"/><path d="M30.4995 41.75L26.9995 35.5H38.9995L35.9995 41.75L38.9995 51.5L32.9995 59.5L27.4995 51.5L30.4995 41.75Z" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="49" height="64" viewBox="0 0 49 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18.5 24.1362C19 23.8029 20.3 23.1362 21.5 23.1362C23 23.1362 23.5 24.6362 24.5 24.1362C25.5 23.6362 27.5 22.6362 28.5 23.1362C29.3 23.5362 30.1667 24.3029 30.5 24.6363" stroke="white" stroke-width="5"/><path d="M2.5 57C2.5 57 2.50005 35 24.5 35C45.509 35.991 46.5 57 46.5 57" stroke="white" stroke-width="5"/><circle cx="24.5" cy="19" r="16.5" stroke="white" stroke-width="5"/><path d="M21.5 41.75L18 35.5H30L27 41.75L30 51.5L24 59.5L18.5 51.5L21.5 41.75Z" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="49" height="64" viewBox="0 0 49 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 57C2.5 57 2.50005 35 24.5 35C45.509 35.991 46.5 57 46.5 57" stroke="white" stroke-width="5"/><circle cx="24.5" cy="19" r="16.5" stroke="white" stroke-width="5"/><rect x="5" y="12.5" width="16" height="10" stroke="white" stroke-width="5"/><rect x="28" y="12.5" width="16" height="10" stroke="white" stroke-width="5"/><path d="M21.5 41.75L18 35.5H30L27 41.75L30 51.5L24 59.5L18.5 51.5L21.5 41.75Z" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="84" height="63" viewBox="0 0 84 63" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M19.4897 62.4985C19.4897 62.4985 19.4898 40.4985 41.4897 40.4985C62.4988 41.4895 63.4897 62.4985 63.4897 62.4985" stroke="white" stroke-width="5"/><circle cx="41.4897" cy="24.4985" r="16.5" stroke="white" stroke-width="5"/><path d="M39.4342 8.69115C39.4342 6.19115 37.9342 1.49115 31.9342 2.69115C24.4342 4.19115 17.4341 15.6909 16.9341 22.6909C16.4341 29.6909 24.4341 30.6909 19.9341 39.6909C17.2415 45.0761 10.9341 45.1909 6.93408 43.1909C2.93408 41.1909 0.934201 35.1909 3.93419 29.1909" stroke="white" stroke-width="5"/><path d="M44.4896 8.69115C44.4896 6.19115 45.9896 1.49115 51.9896 2.69115C59.4896 4.19115 66.4897 15.6909 66.9897 22.6909C67.4897 29.6909 59.4898 30.6909 63.9898 39.6909C66.6823 45.0761 72.9897 45.1909 76.9897 43.1909C80.9898 41.1909 82.9896 35.1909 79.9896 29.1909" stroke="white" stroke-width="5"/><rect x="21.9897" y="17.9985" width="16" height="10" stroke="white" stroke-width="5"/><rect x="44.9897" y="17.9985" width="16" height="10" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="57" height="69" viewBox="0 0 57 69" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6.02466 68.5C6.02466 68.5 6.02471 46.5 28.0247 46.5C49.0337 47.491 50.0247 68.5 50.0247 68.5" stroke="white" stroke-width="5"/><circle cx="28.0247" cy="30.5" r="16.5" stroke="white" stroke-width="5"/><path d="M17.0247 19.5C17.0247 19.5 17.0247 2.5 28.0247 2.5C38.5292 3.26577 39.0247 19.5 39.0247 19.5" stroke="white" stroke-width="5"/><path d="M55.0256 11.5C55.0256 11.5 38.9418 18.7348 28.0256 18.7349C17.1095 18.735 1.02476 11.5 1.02476 11.5" stroke="white" stroke-width="5"/><rect x="8.52466" y="24" width="16" height="10" stroke="white" stroke-width="5"/><rect x="31.5247" y="24" width="16" height="10" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="49" height="67" viewBox="0 0 49 67" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 20.8994L8.5 4.39941L22 11.8994" stroke="white" stroke-width="5"/><path d="M39 20.8994L40 4.39941L26.5 11.8994" stroke="white" stroke-width="5"/><path d="M2.5 66.3994C2.5 66.3994 2.50005 44.3994 24.5 44.3994C45.509 45.3904 46.5 66.3994 46.5 66.3994" stroke="white" stroke-width="5"/><circle cx="24.5" cy="28.3994" r="16.5" stroke="white" stroke-width="5"/><rect x="5" y="21.8994" width="16" height="10" stroke="white" stroke-width="5"/><rect x="28" y="21.8994" width="16" height="10" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="84" height="64" viewBox="0 0 84 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M19.4897 63.4985C19.4897 63.4985 19.4898 41.4985 41.4897 41.4985C62.4988 42.4895 63.4897 63.4985 63.4897 63.4985" stroke="white" stroke-width="5"/><circle cx="41.4897" cy="25.4985" r="16.5" stroke="white" stroke-width="5"/><path d="M39.4342 8.69115C39.4342 6.19115 37.9342 1.49115 31.9342 2.69115C24.4342 4.19115 17.4341 15.6909 16.9341 22.6909C16.4341 29.6909 24.4341 30.6909 19.9341 39.6909C17.2415 45.0761 10.9341 45.1909 6.93408 43.1909C2.93408 41.1909 0.934201 35.1909 3.93419 29.1909" stroke="white" stroke-width="5"/><path d="M44.4896 8.69115C44.4896 6.19115 45.9896 1.49115 51.9896 2.69115C59.4896 4.19115 66.4897 15.6909 66.9897 22.6909C67.4897 29.6909 59.4898 30.6909 63.9898 39.6909C66.6823 45.0761 72.9897 45.1909 76.9897 43.1909C80.9898 41.1909 82.9896 35.1909 79.9896 29.1909" stroke="white" stroke-width="5"/><circle cx="33.4897" cy="27.4985" r="2.5" stroke="white" stroke-width="3"/><circle cx="49.4897" cy="27.4985" r="2.5" stroke="white" stroke-width="3"/></svg>`,
+            `<svg width="84" height="64" viewBox="0 0 84 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M19.4897 63.4985C19.4897 63.4985 19.4898 41.4985 41.4897 41.4985C62.4988 42.4895 63.4897 63.4985 63.4897 63.4985" stroke="white" stroke-width="5"/><circle cx="41.4897" cy="25.4985" r="16.5" stroke="white" stroke-width="5"/><path d="M39.4342 8.69115C39.4342 6.19115 37.9342 1.49115 31.9342 2.69115C24.4342 4.19115 17.4341 15.6909 16.9341 22.6909C16.4341 29.6909 24.4341 30.6909 19.9341 39.6909C17.2415 45.0761 10.9341 45.1909 6.93408 43.1909C2.93408 41.1909 0.934201 35.1909 3.93419 29.1909" stroke="white" stroke-width="5"/><path d="M44.4896 8.69115C44.4896 6.19115 45.9896 1.49115 51.9896 2.69115C59.4896 4.19115 66.4897 15.6909 66.9897 22.6909C67.4897 29.6909 59.4898 30.6909 63.9898 39.6909C66.6823 45.0761 72.9897 45.1909 76.9897 43.1909C80.9898 41.1909 82.9896 35.1909 79.9896 29.1909" stroke="white" stroke-width="5"/><circle cx="33.4897" cy="27.4985" r="2.5" stroke="white" stroke-width="3"/><circle cx="49.4897" cy="27.4985" r="2.5" stroke="white" stroke-width="3"/></svg>`,
+            `<svg width="57" height="70" viewBox="0 0 57 70" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6.02466 69.5C6.02466 69.5 6.02471 47.5 28.0247 47.5C49.0337 48.491 50.0247 69.5 50.0247 69.5" stroke="white" stroke-width="5"/><circle cx="28.0247" cy="31.5" r="16.5" stroke="white" stroke-width="5"/><path d="M17.0247 19.5C17.0247 19.5 17.0247 2.5 28.0247 2.5C38.5292 3.26577 39.0247 19.5 39.0247 19.5" stroke="white" stroke-width="5"/><path d="M55.0256 11.5C55.0256 11.5 38.9418 18.7348 28.0256 18.7349C17.1095 18.735 1.02476 11.5 1.02476 11.5" stroke="white" stroke-width="5"/><circle cx="20.0247" cy="33.5" r="2.5" stroke="white" stroke-width="3"/><circle cx="36.0247" cy="33.5" r="2.5" stroke="white" stroke-width="3"/></svg>`,
+            `<svg width="49" height="67" viewBox="0 0 49 67" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 20.8994L8.5 4.39941L22 11.8994" stroke="white" stroke-width="5"/><path d="M39 20.8994L40 4.39941L26.5 11.8994" stroke="white" stroke-width="5"/><path d="M2.5 66.3994C2.5 66.3994 2.50005 44.3994 24.5 44.3994C45.509 45.3904 46.5 66.3994 46.5 66.3994" stroke="white" stroke-width="5"/><circle cx="24.5" cy="28.3994" r="16.5" stroke="white" stroke-width="5"/><circle cx="16.5" cy="30.3994" r="2.5" stroke="white" stroke-width="3"/><circle cx="32.5" cy="30.3994" r="2.5" stroke="white" stroke-width="3"/></svg>`,
+            `<svg width="68" height="67" viewBox="0 0 68 67" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18.4995 20.8994L17.4995 4.39941L30.9995 11.8994" stroke="white" stroke-width="5"/><path d="M47.9995 20.8994L48.9995 4.39941L35.4995 11.8994" stroke="white" stroke-width="5"/><path d="M11.4995 66.3994C11.4995 66.3994 11.4996 44.3994 33.4995 44.3994C54.5085 45.3904 55.4995 66.3994 55.4995 66.3994" stroke="white" stroke-width="5"/><circle cx="33.4995" cy="28.3994" r="16.5" stroke="white" stroke-width="5"/><path d="M13.1474 23.8856C5.14776 21.3856 1.15942 29.0362 2.90393 35.211C4.64844 41.3857 12.6468 43.3856 17.1468 40.3856C20.7468 37.9856 29.6468 34.3856 33.6468 32.8856" stroke="white" stroke-width="5"/><path d="M54.148 24.3719C62.1476 21.8719 66.136 29.5226 64.3915 35.6973C62.647 41.8721 54.6486 43.8719 50.1486 40.8719C46.5486 38.4719 37.6486 34.8719 33.6486 33.3719" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="49" height="67" viewBox="0 0 49 67" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 20.8994L8.5 4.39941L22 11.8994" stroke="white" stroke-width="5"/><path d="M39 20.8994L40 4.39941L26.5 11.8994" stroke="white" stroke-width="5"/><path d="M2.5 66.3994C2.5 66.3994 2.50005 44.3994 24.5 44.3994C45.509 45.3904 46.5 66.3994 46.5 66.3994" stroke="white" stroke-width="5"/><circle cx="24.5" cy="28.3994" r="16.5" stroke="white" stroke-width="5"/><rect x="5" y="19.8994" width="16" height="10" stroke="white" stroke-width="5"/><rect x="28" y="19.8994" width="16" height="10" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="57" height="69" viewBox="0 0 57 69" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6.02466 68.5C6.02466 68.5 6.02471 46.5 28.0247 46.5C49.0337 47.491 50.0247 68.5 50.0247 68.5" stroke="white" stroke-width="5"/><circle cx="28.0247" cy="30.5" r="16.5" stroke="white" stroke-width="5"/><path d="M17.0247 19.5C17.0247 19.5 17.0247 2.5 28.0247 2.5C38.5292 3.26577 39.0247 19.5 39.0247 19.5" stroke="white" stroke-width="5"/><path d="M55.0256 11.5C55.0256 11.5 38.9418 18.7348 28.0256 18.7349C17.1095 18.735 1.02476 11.5 1.02476 11.5" stroke="white" stroke-width="5"/><rect x="8.52466" y="22" width="16" height="10" stroke="white" stroke-width="5"/><rect x="31.5247" y="22" width="16" height="10" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="84" height="63" viewBox="0 0 84 63" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20.4897 62.4985C20.4897 62.4985 20.4898 40.4985 42.4897 40.4985C63.4988 41.4895 64.4897 62.4985 64.4897 62.4985" stroke="white" stroke-width="5"/><circle cx="42.4897" cy="24.4985" r="16.5" stroke="white" stroke-width="5"/><path d="M39.4342 8.69115C39.4342 6.19115 37.9342 1.49115 31.9342 2.69115C24.4342 4.19115 17.4341 15.6909 16.9341 22.6909C16.4341 29.6909 24.4341 30.6909 19.9341 39.6909C17.2415 45.0761 10.9341 45.1909 6.93408 43.1909C2.93408 41.1909 0.934201 35.1909 3.93419 29.1909" stroke="white" stroke-width="5"/><path d="M44.4896 8.69115C44.4896 6.19115 45.9896 1.49115 51.9896 2.69115C59.4896 4.19115 66.4897 15.6909 66.9897 22.6909C67.4897 29.6909 59.4898 30.6909 63.9898 39.6909C66.6823 45.0761 72.9897 45.1909 76.9897 43.1909C80.9898 41.1909 82.9896 35.1909 79.9896 29.1909" stroke="white" stroke-width="5"/><path d="M22.1376 19.9847C14.138 17.4847 10.1497 25.1353 11.8942 31.3101C13.6387 37.4849 21.6371 39.4847 26.1371 36.4847C29.7371 34.0847 38.6371 30.4847 42.6371 28.9847" stroke="white" stroke-width="5"/><path d="M63.1383 20.4711C71.1379 17.971 75.1262 25.6217 73.3817 31.7964C71.6372 37.9712 63.6388 39.9711 59.1388 36.9711C55.5388 34.5711 46.6388 30.9711 42.6388 29.4711" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="84" height="63" viewBox="0 0 84 63" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20.4897 62.4985C20.4897 62.4985 20.4898 40.4985 42.4897 40.4985C63.4988 41.4895 64.4897 62.4985 64.4897 62.4985" stroke="white" stroke-width="5"/><circle cx="42.4897" cy="24.4985" r="16.5" stroke="white" stroke-width="5"/><path d="M39.4342 8.69115C39.4342 6.19115 37.9342 1.49115 31.9342 2.69115C24.4342 4.19115 17.4341 15.6909 16.9341 22.6909C16.4341 29.6909 24.4341 30.6909 19.9341 39.6909C17.2415 45.0761 10.9341 45.1909 6.93408 43.1909C2.93408 41.1909 0.934201 35.1909 3.93419 29.1909" stroke="white" stroke-width="5"/><path d="M44.4896 8.69115C44.4896 6.19115 45.9896 1.49115 51.9896 2.69115C59.4896 4.19115 66.4897 15.6909 66.9897 22.6909C67.4897 29.6909 59.4898 30.6909 63.9898 39.6909C66.6823 45.0761 72.9897 45.1909 76.9897 43.1909C80.9898 41.1909 82.9896 35.1909 79.9896 29.1909" stroke="white" stroke-width="5"/><rect x="22.9897" y="15.9985" width="16" height="10" stroke="white" stroke-width="5"/><rect x="45.9897" y="15.9985" width="16" height="10" stroke="white" stroke-width="5"/></svg>`,
+            // --- Added Avatars to reach 16 ---
+            // --- Duplicates of first 4 avatars to maintain style ---
+            `<svg width="49" height="64" viewBox="0 0 49 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 57C2.5 57 2.50005 35 24.5 35C45.509 35.991 46.5 57 46.5 57" stroke="white" stroke-width="5"/><circle cx="24.5" cy="19" r="16.5" stroke="white" stroke-width="5"/><circle cx="16.5" cy="22" r="2.5" stroke="white" stroke-width="3"/><circle cx="32.5" cy="22" r="2.5" stroke="white" stroke-width="3"/><path d="M21.5 41.75L18 35.5H30L27 41.75L30 51.5L24 59.5L18.5 51.5L21.5 41.75Z" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="68" height="64" viewBox="0 0 68 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.4995 57C11.4995 57 11.4996 35 33.4995 35C54.5085 35.991 55.4995 57 55.4995 57" stroke="white" stroke-width="5"/><circle cx="33.4995" cy="19" r="16.5" stroke="white" stroke-width="5"/><path d="M13.1474 14.4862C5.14776 11.9861 1.15942 19.6368 2.90393 25.8116C4.64844 31.9863 12.6468 33.9862 17.1468 30.9862C20.7468 28.5862 29.6468 24.9862 33.6468 23.4862" stroke="white" stroke-width="5"/><path d="M54.148 14.9725C62.1476 12.4725 66.136 20.1231 64.3915 26.2979C62.647 32.4727 54.6486 34.4725 50.1486 31.4725C46.5486 29.0725 37.6486 25.4725 33.6486 23.9725" stroke="white" stroke-width="5"/><path d="M30.4995 41.75L26.9995 35.5H38.9995L35.9995 41.75L38.9995 51.5L32.9995 59.5L27.4995 51.5L30.4995 41.75Z" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="49" height="64" viewBox="0 0 49 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18.5 24.1362C19 23.8029 20.3 23.1362 21.5 23.1362C23 23.1362 23.5 24.6362 24.5 24.1362C25.5 23.6362 27.5 22.6362 28.5 23.1362C29.3 23.5362 30.1667 24.3029 30.5 24.6363" stroke="white" stroke-width="5"/><path d="M2.5 57C2.5 57 2.50005 35 24.5 35C45.509 35.991 46.5 57 46.5 57" stroke="white" stroke-width="5"/><circle cx="24.5" cy="19" r="16.5" stroke="white" stroke-width="5"/><path d="M21.5 41.75L18 35.5H30L27 41.75L30 51.5L24 59.5L18.5 51.5L21.5 41.75Z" stroke="white" stroke-width="5"/></svg>`,
+            `<svg width="49" height="64" viewBox="0 0 49 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 57C2.5 57 2.50005 35 24.5 35C45.509 35.991 46.5 57 46.5 57" stroke="white" stroke-width="5"/><circle cx="24.5" cy="19" r="16.5" stroke="white" stroke-width="5"/><rect x="5" y="12.5" width="16" height="10" stroke="white" stroke-width="5"/><rect x="28" y="12.5" width="16" height="10" stroke="white" stroke-width="5"/><path d="M21.5 41.75L18 35.5H30L27 41.75L30 51.5L24 59.5L18.5 51.5L21.5 41.75Z" stroke="white" stroke-width="5"/></svg>`
+        ];
+
+        const audioManager = new AudioController();
+        const factManager = new FactManager(audioManager);
+
+
+        // State
+        let currentState = 'LOBBY';
+        let gameStatus = 'LOBBY';
+        let currentPlayers = [];
+        let isGameActive = false;
+        let hurryUpPlayed = false;
+        const TOTAL_SLOTS = 6;
+        const AVATAR_COLORS = ['var(--color-yellow)', 'var(--color-pink)', 'var(--color-green)', 'var(--color-purple)'];
+
+        let previousPlayersMap = {}; // To track score changes
+        let leaderboardRevealCount = 0;
+        let lastRoundLeaderId = null;
+        const submittedPlayers = new Set(); // Track who submitted globally
+
+        // Initial Layout Render
+        renderPlayerSlots([]);
+
+        socket.on('server_info', (data) => {
+            const url = `http://${data.ip}:${data.port}/mobile.html`;
+            const displayEl = document.getElementById('join-url-display');
+            if (displayEl) {
+                displayEl.innerHTML = `הצטרפו בכתובת: <br><span style="direction:ltr; display:inline-block;">${url}</span>`;
+            }
+
+            const qrEl = document.getElementById('qrcode');
+            if (qrEl) {
+                qrEl.innerHTML = ""; // Clear previous
+                new QRCode(qrEl, {
+                    text: url,
+                    width: 150,
+                    height: 150,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            }
+        });
+
+        socket.on('player_joined', (player) => {
+            audioManager.play('join');
+        });
+
+        socket.on('update_player_list', (updatedPlayers) => {
+            currentPlayers = updatedPlayers; // Update global state
+            renderPlayerSlots(currentPlayers);
+
+            // Update counts if in lobby
+            if (currentState === 'LOBBY') {
+                const btn = document.getElementById('start-game-btn'); // Ensure correct ID
+                if (btn) btn.disabled = (currentPlayers.length < 3);
+            }
+        });
+
+        socket.on('player_removed', (data) => {
+            // Handled by update logic
+            console.log('Player removed:', data);
+        });
+
+        const visitedPlayerIds = new Set();
+        const playerAvatarMap = {}; // Maps playerId -> SVG index
+
+        // UNIQUE AVATAR POOL
+        let availableAvatarIndices = Array.from({ length: AVATAR_SVGS.length }, (_, i) => i);
+        // Shuffle
+        for (let i = availableAvatarIndices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [availableAvatarIndices[i], availableAvatarIndices[j]] = [availableAvatarIndices[j], availableAvatarIndices[i]];
+        }
+
+        function startGame() {
+            socket.emit('host_start_game');
+        }
+
+        function renderPlayerSlots(players, roundScoresMap = null) {
+            const rightCol = document.getElementById('col-right');
+            if (!rightCol) return;
+
+            rightCol.innerHTML = '';
+
+            let totalNeeded;
+            if (isGameActive) {
+                totalNeeded = players.length;
+            } else {
+                totalNeeded = Math.max(TOTAL_SLOTS, players.length);
+            }
+
+            for (let i = 0; i < totalNeeded; i++) {
+                const player = players[i];
+                const container = rightCol;
+                const card = document.createElement('div');
+                const cardId = player ? `card-player-${player.id}` : `card-empty-${i}`;
+                card.id = cardId;
+
+                let classes = 'player-card';
+                if (!player) classes += ' empty';
+                else if (player.connected === false) classes += ' disconnected';
+
+                let scoreOverlayHtml = '';
+                let avatarContent = '';
+
+                if (player) {
+                    const color = AVATAR_COLORS[i % AVATAR_COLORS.length];
+
+                    // Assign Avatar if needed
+                    if (playerAvatarMap[player.id] === undefined) {
+                        if (availableAvatarIndices.length > 0) {
+                            playerAvatarMap[player.id] = availableAvatarIndices.pop();
+                        } else {
+                            playerAvatarMap[player.id] = Math.floor(Math.random() * AVATAR_SVGS.length);
+                        }
+                    }
+                    const avatarSvg = AVATAR_SVGS[playerAvatarMap[player.id]];
+
+                }
+
+                card.className = classes;
+
+                if (player) {
+                    const color = AVATAR_COLORS[i % AVATAR_COLORS.length];
+
+                    // State Determination
+                    const isScoring = (roundScoresMap && roundScoresMap[player.id] !== undefined);
+                    const isSubmitted = submittedPlayers.has(player.id);
+                    // Treat VOTING same as WRITING for "Thinking/Typing" state (Hidden Avatar, Dots)
+                    const isTyping = (isGameActive && (gameStatus === 'WRITING' || gameStatus === 'VOTING') && !isSubmitted);
+
+                    // Avatar HTML
+                    let avatarInner = '';
+                    if (isScoring) {
+                        // Scoring State: Show Score + Rolling
+                        const gain = roundScoresMap[player.id];
+                        avatarInner = `<div class="score-overlay" style="opacity:1; transform:scale(1); transition:all 0.2s;">${gain}</div>`;
+                        // Note: We might want the rolling animation which is handled in JS via animateValue later.
+                        // But the container 'score-overlay' is ready.
+                    } else if (isTyping) {
+                        // Typing State: Hide Avatar, Show Dots
+                        avatarInner = `
+                            <div class="thinking-dots" style="opacity:1;">
+                                <span></span><span></span><span></span>
+                            </div>`;
+                    } else {
+                        // Idle / Submitted / Lobby
+                        const avatarSvg = AVATAR_SVGS[playerAvatarMap[player.id]];
+                        // Inject SVG
+                        avatarInner = `<div class="svg-wrapper" style="width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
+                             ${avatarSvg}
+                         </div>`;
+
+                        /* Sticker Logic Removed as per user request */
+                        /* if (isSubmitted) { ... } */
+                    }
+
+                    // Lobby Entry Animation
+                    let avatarClass = 'player-avatar';
+                    if (!visitedPlayerIds.has(player.id)) {
+                        avatarClass += ' avatar-connected';
+                        visitedPlayerIds.add(player.id);
+                    }
+                    if (isSubmitted) classes += ' done';
+                    card.className = classes; // Re-apply done class to card for legacy logic
+
+                    card.innerHTML = `
+                        <div class="${avatarClass}" style="background-color: ${color}; position:relative; overflow:visible;">
+                            ${avatarInner}
+                        </div>
+                        <div class="player-info">
+                            <div class="player-name">${player.nickname}</div>
+                            <div class="player-role">${player.journalisticSpecialty || 'משתתף'}</div>
+                        </div>
+                        
+                        <style>
+                            .player-avatar svg { width: 80%; height: 80%; transition: opacity 0.2s; }
+                            .svg-wrapper { animation: pop-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+                            @keyframes pop-in { from { transform: scale(0); } to { transform: scale(1); } }
+                        </style>
+                    `;
+                } else {
+                    card.innerHTML = `
+                        <div class="player-avatar"></div>
+                        <div class="player-info">
+                            <div class="player-name">ממתין...</div>
+                            <div class="player-role"></div>
+                        </div>
+                    `;
+                }
+
+                container.appendChild(card);
+            }
+        }
+
+        // gameStatus declaration moved to top
+
+        socket.on('player_done_writing', (data) => {
+            // Removed usage here to centralized handler below (line ~848) to avoid double execution.
+            // But we need the Hurry Up logic here? Or move it?
+            // Move Hurry Up logic to the other handler.
+        });
+
+        // --- Game Logic ---
+
+        function setGameContent(html) {
+            audioManager.play('transition');
+            const stage = document.getElementById('game-stage');
+            stage.innerHTML = html;
+        }
+
+        // --- Intro / Instructions Logic ---
+        const INTRO_TIMESTAMPS = [
+            { t: 0.1, action: 'showLogoHelper' },
+            { t: 5.0, action: 'showHeadlineHelper' },
+            { t: 11.0, action: 'showPhoneHelper' }, // Start typing (11+5) - Wait, we wanted +5.
+            { t: 15.0, action: 'showPhoneSuccessHelper' },
+            { t: 21.0, action: 'showOptionsGridHelper' },
+            { t: 28.0, action: 'revealTruthHelper' },
+            { t: 37.0, action: 'endIntroHelper' }
+        ];
+
+        // Apply +5s Shift to timestamps
+        const OFFSET = 5.0;
+        INTRO_TIMESTAMPS.forEach(t => t.t += OFFSET);
+
+        let introAudio = null;
+        let introAnimationFrame = null;
+
+        socket.on('host_phase_instructions', () => {
+            renderIntroScene();
+            startIntroSequence();
+        });
+
+        function renderIntroScene() {
+            setGameContent(`
+                <div class="intro-scene" id="intro-scene-container">
+                    <button class="action-btn" onclick="skipIntro()" style="position:absolute; top:20px; right:20px; font-size:1rem; padding:10px 20px; z-index:2000; background:#333; opacity:0.8;">דלג על המדריך</button>
+
+                    <div id="intro-logo-container" class="intro-centered-content">
+                        <!-- Logo injected via CSS or JS -->
+                        <div class="intro-logo-pop"></div>
+                    </div>
+                    
+                    <div id="intro-headline-container" class="intro-centered-content" style="display:none; opacity:0; z-index: 10;">
+                        <h2 class="phase-title" style="font-size:3rem; margin-bottom: 2rem;">בשקט בשקט הקמנו את בצלאל החדש.<br>עכשיו אפשר ____</h2>
+                        <div style="font-size:1.5rem; color:#666;">מקור: הארץ</div>
+                    </div>
+
+                    <div id="intro-stage-container" style="display:none; width:100%; height:100%; position:relative;">
+                        <!-- Left: Phone -->
+                        <div id="intro-phone-wrapper" class="mock-phone-wrapper" style="opacity:0;">
+                            <div class="mock-phone">
+                                <!-- Mobile.html structure replication -->
+                                <div class="mock-phone-screen">
+                                    <div class="mobile-screen active" style="width: 100%; height: 100%; padding: 15px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-start; text-align: center;">
+                                        <h2 style="font-size: 1.2rem; margin-top: 10px; color: black;">שאלה 1/1</h2>
+                                        <div style="background:#222; padding:5px; border-radius:5px; margin-bottom:5px; color: #aaa; font-size: 0.7em;">
+                                            <strong>הארץ</strong>
+                                        </div>
+                                        <div style="background:#333; padding:8px; border-radius:5px; margin-bottom:10px; color: white; font-size: 0.8rem;">
+                                            <strong>בשקט בשקט הקמנו את בצלאל החדש. עכשיו אפשר ____</strong>
+                                        </div>
+                                        <div class="mock-input-container" style="position:relative; width:100%;">
+                                            <input type="text" class="mobile-input" style="pointer-events:none; font-size: 1rem; padding: 10px;" value="" placeholder="השלם את הכותרת...">
+                                            <div id="typing-overlay" style="position:absolute; top:12px; right:15px; font-size:1rem; font-weight:bold; color:black;">
+                                                <span id="typing-text"></span><span class="mock-cursor">|</span>
+                                            </div>
+                                        </div>
+                                        <button class="mobile-btn" style="pointer-events:none; margin-top:5px; padding: 10px; font-size:1rem;">שלח</button>
+                                        
+                                        <div class="mock-avatar-container" style="margin-top:auto; margin-bottom: 20px;">
+                                            <div class="mock-avatar" id="mock-avatar-yellow"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right/Center: Grid -->
+                        <div id="intro-grid-wrapper" class="intro-grid-wrapper" style="opacity:0; flex-direction:column; align-items:center;">
+                             <!-- Headline Re-appears here -->
+                             <div id="intro-grid-headline" style="text-align:center; margin-bottom:20px; opacity:0; transition:opacity 0.5s;">
+                                <h3 style="font-size:2rem; font-weight:bold; margin:0;" id="intro-grid-headline-text">בשקט בשקט הקמנו את בצלאל החדש.<br>עכשיו אפשר ____</h3>
+                             </div>
+
+                            <div class="voting-grid" id="intro-mock-grid">
+                                <!-- Filled by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="intro-start-btn" class="action-btn" onclick="startRound()" style="display:none; position:absolute; bottom:50px; left:50%; transform:translateX(-50%); font-size:2rem; padding: 20px 60px; z-index:1000; animation: pulse-btn 2s infinite;">יאללה, מתחילים!</button>
+                </div>
+            `);
+        }
+
+        let bgMusic = null;
+
+        function skipIntro() {
+            startRound(); // Stops audio and emits start_round
+        }
+
+        function startIntroSequence() {
+            // Reset state
+            if (introAudio) { introAudio.pause(); introAudio = null; }
+            if (bgMusic) { bgMusic.pause(); bgMusic = null; }
+            cancelAnimationFrame(introAnimationFrame);
+
+            // Create Audio Objects
+            introAudio = new Audio('intro voice over.wav');
+            bgMusic = new Audio('into-music.mp3'); // Updated file (typo in filename is real)
+            bgMusic.loop = true; // Loop the music
+            bgMusic.volume = 0.3; // Lower volume for background
+            bgMusic.volume = 0.3; // Lower volume for background
+
+            // Register with Manager
+            audioManager.setBGM(bgMusic);
+
+            // Error Handling
+            introAudio.onerror = () => alert("שגיאה! קובץ 'intro voice over.wav' לא נמצא בתיקיית public.");
+            bgMusic.onerror = () => console.warn("Background music file not found?");
+
+            // Start playing BOTH
+            Promise.all([
+                introAudio.play(),
+                bgMusic.play()
+            ]).then(() => {
+                introLoop();
+            }).catch(e => {
+                console.error("Audio play failed:", e);
+                alert("הדפדפן חסם את ניגון הסאונד. נסה ללחוץ שוב על המסך.");
+            });
+        }
+
+        let lastActionIndex = -1;
+
+        function introLoop() {
+            if (!introAudio) return;
+            const currentTime = introAudio.currentTime;
+
+            // Check timestamps
+            for (let i = lastActionIndex + 1; i < INTRO_TIMESTAMPS.length; i++) {
+                if (currentTime >= INTRO_TIMESTAMPS[i].t) {
+                    const actionName = INTRO_TIMESTAMPS[i].action;
+                    executeIntroAction(actionName);
+                    lastActionIndex = i;
+                }
+            }
+
+            if (!introAudio.paused && !introAudio.ended) {
+                introAnimationFrame = requestAnimationFrame(introLoop);
+            }
+        }
+
+        const MOCK_OPTIONS = [
+            "לצייר אננסים", "לבנות כיסא", "לייצא לPDF",
+            "לבעוט בכלב", "להאשים את הגירעון", "להרעיש"
+        ];
+
+        function executeIntroAction(action) {
+            console.log("Intro Action:", action);
+            const container = document.getElementById('intro-scene-container');
+            if (!container) return;
+
+            switch (action) {
+                case 'showLogoHelper':
+                    break;
+
+                case 'showHeadlineHelper':
+                    document.getElementById('intro-logo-container').style.display = 'none';
+                    const hl = document.getElementById('intro-headline-container');
+                    hl.style.display = 'flex';
+                    setTimeout(() => hl.style.opacity = 1, 50);
+                    break;
+
+                case 'showPhoneHelper':
+                    document.getElementById('intro-headline-container').style.display = 'none';
+                    document.getElementById('intro-stage-container').style.display = 'flex';
+
+                    const phone = document.getElementById('intro-phone-wrapper');
+                    phone.style.opacity = 1;
+                    phone.classList.add('slide-in-right');
+
+                    setTimeout(() => typeWriter("לאכול בפלאפל התימני", "typing-text", 50), 500);
+                    break;
+
+                case 'showPhoneSuccessHelper':
+                    const avatar = document.getElementById('mock-avatar-yellow');
+                    avatar.classList.add('pop-intro-avatar');
+                    const v = document.createElement('div');
+                    v.className = 'intro-v-mark';
+                    v.innerText = '✓';
+                    avatar.appendChild(v);
+                    break;
+
+                case 'showOptionsGridHelper':
+                    const gridWrap = document.getElementById('intro-grid-wrapper');
+                    gridWrap.style.opacity = 1;
+
+                    // Show Header above grid
+                    const gridHl = document.getElementById('intro-grid-headline');
+                    if (gridHl) gridHl.style.opacity = 1;
+
+                    const grid = document.getElementById('intro-mock-grid');
+                    grid.innerHTML = '';
+
+                    MOCK_OPTIONS.forEach((txt, idx) => {
+                        const div = document.createElement('div');
+                        div.className = 'voting-option intro-option-card';
+                        div.innerText = txt;
+                        div.style.animationDelay = `${idx * 0.15}s`;
+                        if (txt === "להרעיש") div.id = 'intro-truth-card';
+                        grid.appendChild(div);
+                    });
+                    break;
+
+                case 'revealTruthHelper':
+                    const truthCard = document.getElementById('intro-truth-card');
+                    if (truthCard) {
+                        truthCard.classList.add('reveal-truth-highlight');
+                        truthCard.classList.add('truth-reveal'); // Green
+
+                        // Color all OTHERS red
+                        const allCards = document.querySelectorAll('.intro-option-card');
+                        allCards.forEach(c => {
+                            if (c !== truthCard) {
+                                c.classList.add('reveal-lie-revealed');
+                                c.classList.add('lie-reveal-intro');
+                            }
+                        });
+
+
+                        // 3. Fill Blank in Grid Headline
+                        const gridHlText = document.getElementById('intro-grid-headline-text');
+                        if (gridHlText) {
+                            gridHlText.innerHTML = `בשקט בשקט הקמנו את בצלאל החדש.<br>עכשיו אפשר <span class="truth-word-highlight">להרעיש</span>`;
+                        }
+
+                        simulateScoreRoll();
+                    }
+                    break;
+
+                case 'endIntroHelper':
+                    // Just hide stage, show button. Do NOT clear HTML.
+                    const stage = document.getElementById('intro-stage-container');
+                    const logo = document.getElementById('intro-logo-container');
+                    const mainHl = document.getElementById('intro-headline-container');
+
+                    if (stage) stage.style.opacity = 0;
+
+                    setTimeout(() => {
+                        if (stage) stage.style.display = 'none';
+                        if (logo) logo.style.display = 'none';
+                        if (mainHl) mainHl.style.display = 'none';
+
+                        const btn = document.getElementById('intro-start-btn');
+                        if (btn) {
+                            btn.style.display = 'block';
+                        }
+                    }, 500);
+                    break;
+            }
+        }
+
+        function typeWriter(text, elementId, speed) {
+            let i = 0;
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.innerHTML = '';
+            function type() {
+                if (i < text.length) {
+                    el.innerHTML += text.charAt(i);
+                    i++;
+                    setTimeout(type, speed);
+                }
+            }
+            type();
+        }
+
+        function simulateScoreRoll() {
+            // "Inside the avatar squares... animate numbers incrementing".
+            // We have real players on the right column.
+            const overlays = document.querySelectorAll('.player-avatar');
+            overlays.forEach(av => {
+                // Check if already has overlay
+                let ov = av.querySelector('.score-overlay');
+                if (!ov) {
+                    ov = document.createElement('div');
+                    ov.className = 'score-overlay';
+                    av.appendChild(ov);
+                }
+                animateValue(ov, 0, 10, 2000);
+            });
+        }
+
+        function animateValue(obj, start, end, duration, onComplete) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                obj.innerHTML = "+" + Math.floor(progress * (end - start) + start);
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                } else {
+                    if (onComplete) onComplete();
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        function startGame() { socket.emit('host_start_game'); }
+        function startRound() {
+            // Stop audio if playing
+            if (introAudio) { introAudio.pause(); }
+            if (bgMusic) { bgMusic.pause(); }
+            socket.emit('host_start_round');
+        }
+        function nextPhase() { socket.emit('host_next_phase'); }
+
+        function updateMarquee(text) {
+            const el = document.getElementById('header-marquee');
+            if (el) {
+                // Repeat 4 times for smooth scroll
+                el.textContent = `${text} * ${text} * ${text} * ${text}`;
+            }
+        }
+
+        // --- Timer / Progress Bar ---
+        let timerInterval = null;
+
+        function startProgressBar(duration) {
+            const bar = document.getElementById('footer-progress');
+            if (!bar) return;
+
+            // Clear previous stress states
+            bar.classList.remove('timer-stress', 'timer-stress-fast');
+            bar.parentElement.style.direction = 'ltr';
+
+            // Reset
+            bar.style.transition = 'none';
+            bar.style.width = '100%';
+
+            if (!duration) return;
+
+            // Force reflow
+            void bar.offsetWidth;
+
+            // Start animation
+            setTimeout(() => {
+                bar.style.transition = `width ${duration}ms linear`;
+                bar.style.width = '0%';
+            }, 50);
+
+            // Stress Timer Logic
+            // Calculate when to trigger stress (30s remaining) and critical (10s remaining)
+            const stressDelay = duration - 30000;
+            const criticalDelay = duration - 10000;
+
+            if (stressDelay > 0) {
+                setTimeout(() => {
+                    bar.classList.add('timer-stress'); // Turns Red + Heartbeat
+                }, stressDelay);
+            }
+
+            if (criticalDelay > 0) {
+                setTimeout(() => {
+                    bar.classList.add('timer-stress-fast'); // Faster Heartbeat
+                    // Increase clock speed/volume?
+                    // HTML5 Audio playbackRate
+                    if (audioManager.sounds['clock']) {
+                        audioManager.sounds['clock'].playbackRate = 1.5;
+                        audioManager.sounds['clock'].volume = 1.0;
+                    }
+                }, criticalDelay);
+            }
+        }
+
+        function stopProgressBar() {
+            const bar = document.getElementById('footer-progress');
+            if (bar) {
+                const currentWidth = bar.getBoundingClientRect().width;
+                bar.style.transition = 'none';
+                bar.style.width = currentWidth + 'px';
+            }
+            // Stop clock
+            // audioManager.stop('clock'); // User requested removal
+            // Reset clock params
+            /* if (audioManager.sounds['clock']) {
+                audioManager.sounds['clock'].playbackRate = 1.0;
+                audioManager.sounds['clock'].volume = 1.0;
+            } */
+        }
+
+        // Writing Phase
+        socket.on('host_phase_writing', async (data) => {
+            isGameActive = true;
+            gameStatus = 'WRITING'; // Update status for animations
+            hurryUpPlayed = false; // Reset for new phase
+            submittedPlayers.clear(); // Reset submissions for new round
+
+            const roundNum = data.roundNum || 1;
+
+            // Show Round Intro Sequence (Slide + Audio)
+            // This waits for the audio to finish before showing the writing UI
+            await showRoundIntro(roundNum);
+
+            renderPlayerSlots(currentPlayers); // clear overlays
+            if (data.duration) startProgressBar(data.duration);
+
+            // --- Theme Logic ---
+            document.body.className = 'host-body'; // Reset
+
+            // Re-apply Round Theme for Writing Phase
+            // Round 1: Shake
+            if (roundNum === 1) document.body.classList.add('theme-shake');
+            // Round 2: Blue
+            if (roundNum === 2) document.body.classList.add('theme-blue');
+            // Round 3: Intense
+            if (roundNum === 3) document.body.classList.add('theme-intense');
+            // Round 4: Gold
+            if (roundNum === 4) document.body.classList.add('theme-gold');
+
+            window.currentRoundNum = roundNum;
+            updateMarquee(`סיבוב ${roundNum} - שלב הכתיבה - המציאו כותרות משכנעות!`);
+
+            factManager.start();
+
+            // Start Soundtrack if not playing (Transition from Intro to Game)
+            // Function to handle safe BGM switch
+            handleGameBGM();
+
+            let title = "סיבוב 1: חימום";
+            let subtitle = "10 נקודות למציאת האמת, 5 לכל הפלה בפח";
+
+            if (roundNum === 2) { title = "סיבוב 2: מעלים הילוך"; }
+            if (roundNum === 3) { title = "סיבוב 3: המהדורה המרכזית"; }
+            if (roundNum === 4) {
+                title = "סיבוב 4: הגמר הגדול!";
+                subtitle = "ניקוד כפול! 20 למציאת האמת, 10 לכל הפלה בפח";
+            }
+
+            setGameContent(`
+                <h2 class="phase-title animated-title">${title}</h2>
+                <h3 style="font-size:1.5rem;">${subtitle}</h3>
+                <div class="lobby-media-placeholder" style="background:transparent; display:flex; font-size:4rem; justify-content:center; align-items:center;">
+                    📰
+                </div>
+                <div id="submission-count" style="font-size:3rem; font-weight:bold; margin-top:50px;">0 כתבים סיימו</div>
+                ${roundNum === 4 ? '<div class="double-points-badge">X2</div>' : ''}
+            `);
+        });
+
+        socket.on('game_winner_reveal', (sortedPlayers) => {
+            renderWinnerScene(sortedPlayers);
+        });
+
+        function renderWinnerScene(sortedPlayers) {
+            audioManager.stop('clock');
+            audioManager.stop('rolling');
+
+            // Winners: Top 1, 2, 3
+            const p1 = sortedPlayers[0];
+            const p2 = sortedPlayers[1];
+            const p3 = sortedPlayers[2];
+
+            setGameContent(`
+                <div class="winner-scene">
+                    <canvas id="confetti-canvas"></canvas>
+                    <h1 class="winner-title">המאסטר של פוש מייקר!</h1>
+                    
+                    <div class="podium-container">
+                        <!-- 2nd Place -->
+                         <div class="podium-pillar pillar-2">
+                            <div class="podium-avatar">${getColoredAvatar(p2)}</div>
+                            <div class="podium-rank">2</div>
+                            <div class="podium-name">${p2 ? p2.nickname : '-'}</div>
+                            <div class="podium-score">${p2 ? p2.score : 0}</div>
+                        </div>
+
+                        <!-- 1st Place -->
+                        <div class="podium-pillar pillar-1">
+                            <div class="crown-icon">👑</div>
+                            <div class="podium-avatar main-avatar">${getColoredAvatar(p1)}</div>
+                            <div class="podium-rank">1</div>
+                            <div class="podium-name">${p1 ? p1.nickname : '-'}</div>
+                            <div class="podium-score">${p1 ? p1.score : 0}</div>
+                        </div>
+
+                        <!-- 3rd Place -->
+                        <div class="podium-pillar pillar-3">
+                            <div class="podium-avatar">${getColoredAvatar(p3)}</div>
+                            <div class="podium-rank">3</div>
+                            <div class="podium-name">${p3 ? p3.nickname : '-'}</div>
+                            <div class="podium-score">${p3 ? p3.score : 0}</div>
+                        </div>
+                    </div>
+                <button onclick="socket.emit('host_restart_game')" class="action-btn" style="
+                    margin-top: 0px; 
+                    background: #FFD700; 
+                    color: black; 
+                    font-size: 2rem; 
+                    padding: 15px 40px; 
+                    border: none; 
+                    border-radius: 50px; 
+                    cursor: pointer; 
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.2); 
+                    z-index: 100;
+                    transition: transform 0.2s;
+                    position: relative;
+                    top: -40px;
+                " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    התחילו משחק חדש!
+                </button>
+            </div>
+        `);
+
+            // Audio
+            audioManager.play('jackpot');
+            setTimeout(() => audioManager.play('all_right'), 2000); // Applause simulation
+
+            // Start Confetti
+            startConfetti();
+        }
+
+        function getColoredAvatar(player) {
+            if (!player) return '';
+            // Find index in currentPlayers to determine strict color assignment
+            // Assuming currentPlayers holds ordered list of players as they joined
+            const idx = currentPlayers.findIndex(p => p.id === player.id);
+            const color = (idx >= 0) ? AVATAR_COLORS[idx % AVATAR_COLORS.length] : 'white';
+
+            if (playerAvatarMap[player.id] !== undefined) {
+                let svg = AVATAR_SVGS[playerAvatarMap[player.id]];
+                return svg.replace(/stroke="white"/g, `stroke="${color}"`);
+            }
+            return '';
+        }
+
+
+        socket.on('player_done_writing', (data) => {
+            const card = document.getElementById(`card-player-${data.playerId}`);
+            if (card) {
+                // Modified: Wait for 3/3 before showing DONE
+                if (data.count >= 3) {
+                    submittedPlayers.add(data.playerId); // Track state
+                    renderPlayerSlots(currentPlayers); // Re-render to show V and remove dots
+
+                    audioManager.play('submission');
+                } else {
+                    // Show progress badge e.g. "1/3" or "2/3"
+                    let badge = card.querySelector('.progress-badge');
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.className = 'progress-badge';
+                        badge.style.position = 'absolute';
+                        badge.style.top = '-10px';
+                        badge.style.right = '-10px';
+                        badge.style.background = 'var(--color-blue)';
+                        badge.style.color = 'white';
+                        badge.style.borderRadius = '50%';
+                        badge.style.width = '30px';
+                        badge.style.height = '30px';
+                        badge.style.display = 'flex';
+                        badge.style.justifyContent = 'center';
+                        badge.style.alignItems = 'center';
+                        badge.style.fontWeight = 'bold';
+                        card.appendChild(badge);
+                    }
+                    badge.innerText = `${data.count}/3`;
+
+                    // Small pop animation
+                    card.style.transform = 'scale(1.1)';
+                    setTimeout(() => card.style.transform = 'scale(1)', 200);
+                    audioManager.play('pop');
+                }
+
+                // Moved Hurry Up Logic Here
+                const doneCount = currentPlayers.filter(p => document.getElementById(`card-player-${p.id}`)?.classList.contains('done')).length;
+                if (!hurryUpPlayed && currentPlayers.length > 1 && doneCount === currentPlayers.length - 1) {
+                    factManager.stop(); // Stop facts when hurry up plays
+                    audioManager.play('hurry_up');
+                    hurryUpPlayed = true;
+                }
+            }
+        });
+
+        let gameSoundtrack = null;
+        function handleGameBGM() {
+            // If intro music is still the "bgm", stop it and start soundtrack
+            // We use audioManager.bgm to check current.
+            // But we created bgMusic globally for intro.
+
+            // 1. Create soundtrack if needed
+            if (!gameSoundtrack) {
+                gameSoundtrack = new Audio('soudtrack.mp3'); // Typo in filename
+                gameSoundtrack.loop = true;
+                gameSoundtrack.volume = 0.2; // Adjust volume as needed
+            }
+
+            // 2. Play if not playing
+            if (audioManager.bgm !== gameSoundtrack) {
+                // fade out old? audioManager.duckBGM handled ducking, not crossfade.
+                // Just hard switch for now or simple stop.
+                if (bgMusic) {
+                    bgMusic.pause();
+                    bgMusic = null; // Detach
+                }
+
+                audioManager.setBGM(gameSoundtrack);
+                gameSoundtrack.play().catch(e => console.warn("Game soundtrack failed", e));
+            }
+        }
+
+        socket.on('update_submission_count', (count) => {
+            const el = document.getElementById('submission-count');
+            if (el) el.innerText = `${count} כתבים סיימו`;
+        });
+
+        socket.on('game_over_results', (data) => {
+            stopProgressBar();
+            factManager.stop(); // Ensure facts stop
+
+            // --- Analyze Stats for Host Punches ---
+            const totalVotes = Object.keys(data.votes).length;
+            const truthOptionIndex = data.options.findIndex(o => o.isReal);
+            const votesForTruth = Object.values(data.votes).filter(v => v === truthOptionIndex).length;
+
+            let bestLieIndex = -1;
+            let maxLieVotes = 0;
+
+            data.options.forEach((o, idx) => {
+                if (!o.isReal) {
+                    const votes = Object.values(data.votes).filter(v => v === idx).length;
+                    if (votes > maxLieVotes) {
+                        maxLieVotes = votes;
+                        bestLieIndex = idx;
+                    }
+                }
+            });
+
+            // Logic Conditions
+            const HOST_PUNCH_CONFIG = {
+                GOOD_LIE_PERCENT: 0.60, // 60% of votes needed for "Good Lie"
+                UNDERDOG_RANK_THRESHOLD: 3 // Top 3
+            };
+
+            const isAllRight = (totalVotes > 0 && votesForTruth === totalVotes);
+            const isAllWrong = (totalVotes > 0 && votesForTruth === 0);
+            const isGoodLie = (bestLieIndex !== -1 && totalVotes > 0 && (maxLieVotes / totalVotes) >= HOST_PUNCH_CONFIG.GOOD_LIE_PERCENT);
+
+            data.punchFlags = { isAllRight, isAllWrong, isGoodLie, bestLieIndex };
+            // ---------------------------------------
+
+            // 1. Calculate Score Gains and Previous Ranks
+            const roundScoresMap = {};
+            const newPlayersArray = Object.values(data.players);
+
+            // GLOBAL STORAGE FOR LEADERBOARD
+            window.lastRoundGains = {};
+
+            // Calculate Old Ranks (for Underdog detection)
+            // Sort currentPlayers (which are still old state)
+            const oldSorted = [...currentPlayers].sort((a, b) => b.score - a.score);
+            const oldRankMap = {};
+            oldSorted.forEach((p, i) => oldRankMap[p.id] = i);
+
+            newPlayersArray.forEach(p => {
+                // Attach previous rank to new player object for Leaderboard phase
+                if (oldRankMap[p.id] !== undefined) {
+                    p.previousRank = oldRankMap[p.id];
+                } else {
+                    p.previousRank = 999; // New player?
+                }
+
+                // ...
+                // Calculate gain (logic from before)
+                // Use 'currentPlayers' to find old score
+                const oldP = currentPlayers.find(op => op.id === p.id);
+                const old = oldP ? oldP.score : 0;
+                const gain = p.score - old;
+                roundScoresMap[p.id] = gain;
+                window.lastRoundGains[p.id] = gain; // Store for leaderboard
+            });
+
+            currentPlayers = newPlayersArray;
+            renderPlayerSlots(currentPlayers); // Render initially WITHOUT scores (show avatars)
+
+            // 2. Prepare Data for Sequence
+            const truthOption = data.options.find(o => o.isReal);
+            const missingWord = truthOption ? truthOption.text : "???";
+
+            let fullHeadline = missingWord;
+            if (data.original) {
+                // Initialize hidden truth word
+                fullHeadline = data.original.replace(missingWord, `<span class="truth-word">${missingWord}</span>`);
+            } else if (data.question) {
+                fullHeadline = data.question.replace(/____/g, `<span class="truth-word">${missingWord}</span>`);
+            }
+            fullHeadline = fullHeadline.replace(/_+/g, '');
+
+            const randomExc = ["חשיפה!", "לא יאמן!", "מטורף!", "מרגש!", "וואו!", "בלעדי!"][Math.floor(Math.random() * 6)];
+
+            let sourceHtml = '';
+            if (data.source) {
+                sourceHtml = `<div style="font-size:1.2rem; color:#888; font-weight:normal; margin-top:5px;">מתוך: ${data.source}</div>`;
+            }
+
+
+            // 3. Render Initial Hidden Layout
+            let stackHtml = '<div class="results-stack">';
+            data.options.forEach((opt, idx) => {
+                const isTruth = opt.isReal;
+                const authorName = isTruth ? "האמת!" : (data.players[opt.playerId]?.nickname || "לא ידוע");
+
+                // Revert to Nicknames, NO Avatars on cards
+                let votersHtml = `<div class="result-voters" id="voters-container-${idx}">`;
+                for (const [pid, choice] of Object.entries(data.votes)) {
+                    if (choice === idx && data.players[pid]) {
+                        const pIndex = currentPlayers.findIndex(p => p.id === pid);
+                        const color = (pIndex >= 0) ? AVATAR_COLORS[pIndex % AVATAR_COLORS.length] : '#999';
+                        // Just Nickname
+                        votersHtml += `<span class="voter-badge" style="background-color: ${color}; opacity:0; transform:scale(0);" data-pid="${pid}">${data.players[pid].nickname}</span>`;
+                    }
+                }
+                votersHtml += '</div>';
+
+                // Add ID to card for JS manipulation. Note 'reveal-card-entry' class for CSS animation.
+                stackHtml += `
+                    <div id="result-card-${idx}" class="result-card reveal-card-entry ${isTruth ? 'truth-card' : 'lie-card'}" style="animation-delay: ${idx * 0.15}s"> 
+                        <div class="result-card-content">
+                            <div class="result-text">
+                                ${opt.text}
+                            </div>
+                            <div class="result-author" style="opacity:0;"> <!-- Hidden Author -->
+                                ${isTruth ? ('מקור: ' + (data.source || 'לא ידוע')) : 'מאת: ' + authorName}
+                            </div>
+                        </div>
+                        ${votersHtml}
+                    </div>
+                `;
+            });
+            stackHtml += '</div>';
+
+            let btnText = "לשאלה הבאה";
+            if (data.isLastStep) {
+                if (window.currentRoundNum === 4) {
+                    btnText = "לתוצאות הסופיות";
+                } else {
+                    btnText = "לטבלת הניקוד";
+                }
+            }
+
+            // Add CSS for truth word hidden state
+            const truthStyle = `<style>.truth-word { color: var(--color-pink); opacity: 0; transition: opacity 1s; }</style>`;
+
+            setGameContent(`
+                ${truthStyle}
+                <div class="reveal-header-split">
+                    <div class="reveal-text-area">
+                        <div class="reveal-badge">${randomExc}</div>
+                        <div class="reveal-headline">
+                            ${fullHeadline}
+                            ${sourceHtml}
+                        </div>
+                    </div>
+                </div>
+                
+                ${stackHtml}
+                
+                <button id="next-phase-btn" class="action-btn" onclick="this.disabled=true; nextPhase()" style="display:none; opacity:0; transition:opacity 1s;">${btnText}</button>
+            `);
+
+            // 4. Start Sequence
+            runRevealSequence(data, roundScoresMap);
+        });
+
+        async function showRoundIntro(roundNum) {
+            const INTRO_CONFIG = {
+                1: {
+                    title: "סִיבּוּב רִאשׁוֹן! מַתְחִילִים!",
+                    sub: "",
+                    className: "theme-shake", // Shake entire body? Or specific element? User said "visual: display text with slam and shake"
+                    textAnim: "intro-slam-shake"
+                },
+                2: {
+                    title: "סִיבּוּב שֵׁנִי! הַפִּיד מִתְחַמֵּם!",
+                    sub: "",
+                    className: "theme-blue",
+                    textAnim: "intro-fade-in"
+                },
+                3: {
+                    title: "סִיבּוּב שְׁלִישִׁי! הַמַּהֲדוּרָה הַמֶּרְכָּזִית!",
+                    sub: "",
+                    className: "theme-intense",
+                    textAnim: "intro-pulse"
+                },
+                4: {
+                    title: "סִיבּוּב אַחֲרוֹן!",
+                    sub: "כָּל נִיקּוּד שֶׁתִּצְבְּרוּ בַּסִּיבּוּב הַזֶּה שָׁוֶוה פִּי 2!",
+                    className: "theme-gold",
+                    textAnim: "intro-neon-flicker"
+                }
+            };
+
+            const cfg = INTRO_CONFIG[roundNum];
+            if (!cfg) return;
+
+            // Optional: apply body theme early
+            document.body.className = 'host-body ' + cfg.className;
+
+            const subHtml = cfg.sub ? `<div class="intro-subtext">${cfg.sub}</div>` : '';
+
+            // Render Slide
+            setGameContent(`
+                <div class="round-intro-slide">
+                    <h1 class="intro-title ${cfg.textAnim}">${cfg.title}</h1>
+                    ${subHtml}
+                    ${roundNum === 4 ? '<canvas id="intro-particles"></canvas>' : ''}
+                </div>
+            `);
+
+            if (roundNum === 4 && typeof startConfetti === 'function') {
+                // Reuse confetti or particles logic? Using 'startConfetti' implies confetti. 
+                // We might want gold particles. For now let's just trigger confetti if available or assume CSS handles it.
+                // Or maybe just leave it to CSS background.
+            }
+
+            // Play Audio & Wait
+            await audioManager.playRoundIntro(roundNum);
+        }
+
+        // Configuration for Animation Timings (Global)
+        const ANIMATION_CONFIG = {
+            ENTRY_DELAY_PER_CARD: 150, // Time between each card sliding in
+            ENTRY_INITIAL_WAIT: 500,   // Initial wait before sequence starts
+            next_card_delay: 500,      // Pause before moving to the next card
+            final_delay: 2000,         // Wait before showing "Next Phase" button
+
+            // --- Entry / Scale Settings ---
+            reveal_scale_amount: 1.3,      // How much to zoom in (1.3 = 130%)
+            entry_animation_duration: 2000, // Speed of initial slide-up
+            entry_animation_ease: 'ease-out',
+
+            // --- Animation Speed / Easing ---
+            card_transition_duration: 2000, // Speed of the zoom/reveal transition (ms) - affects easing
+            card_transition_ease: 'ease',  // 'ease', 'linear', 'cubic-bezier(...)', etc.
+
+            // --- Lie Animation Sequence Delays ---
+            // Order: Zoom -> Border -> Author -> Voters -> Unzoom
+            lie_zoom_duration: 2000,       // 1. Wait after Zoom
+            lie_border_wait: 500,         // 2. Wait after Border Reveal
+            lie_author_wait: 500,         // 3. Wait after Author Reveal
+            lie_voter_stagger: 300,       // 4. Delay between each voter badge
+            lie_post_voters_wait: 1000,   // 5. Wait after all voters appear before Unzoom
+
+            // --- Truth Animation Sequence Delays ---
+            truth_reveal_start_delay: 0,
+            truth_zoom_duration: 2000,     // 1. Wait after Zoom
+            truth_border_wait: 500,       // 2. Wait after Border Reveal
+            truth_author_wait: 500,       // 3. Wait after Source Reveal
+            truth_voter_stagger: 300,     // 4. Delay between voters
+            truth_post_voters_wait: 1000  // 5. Wait after voters before Unzoom
+        };
+
+        async function runRevealSequence(data, roundScoresMap) {
+            // Sync ANIMATION_CONFIG to CSS variables
+            document.documentElement.style.setProperty('--reveal-transition-duration', (ANIMATION_CONFIG.card_transition_duration || 500) + 'ms');
+            document.documentElement.style.setProperty('--reveal-transition-ease', ANIMATION_CONFIG.card_transition_ease || 'ease');
+            document.documentElement.style.setProperty('--reveal-scale-amount', ANIMATION_CONFIG.reveal_scale_amount || 1.3);
+            document.documentElement.style.setProperty('--entry-duration', (ANIMATION_CONFIG.entry_animation_duration || 500) + 'ms');
+            document.documentElement.style.setProperty('--entry-ease', ANIMATION_CONFIG.entry_animation_ease || 'ease-out');
+
+            const delay = ms => new Promise(res => setTimeout(res, ms));
+
+            audioManager.play('drumroll');
+
+            // Wait for entry animations (cards sliding up)
+            await delay(data.options.length * ANIMATION_CONFIG.ENTRY_DELAY_PER_CARD + ANIMATION_CONFIG.ENTRY_INITIAL_WAIT);
+
+            // 1. Loop through VOTED LIES only
+            for (let i = 0; i < data.options.length; i++) {
+                const opt = data.options[i];
+                if (opt.isReal) continue;
+
+                // Check votes
+                const votesForOption = Object.values(data.votes).filter(vIndex => vIndex === i).length;
+                if (votesForOption === 0) continue; // Skip unvoted
+
+                const card = document.getElementById(`result-card-${i}`);
+                if (!card) continue;
+
+                // 1. Spotlight Lie (Zoom)
+                card.classList.add('reveal-lie-highlight');
+                await delay(ANIMATION_CONFIG.lie_zoom_duration);
+
+                // 2. Reveal Status (Border)
+                card.classList.add('reveal-lie-revealed');
+                // audioManager.play('wrong'); // Moved to step 3 as requested
+                await delay(ANIMATION_CONFIG.lie_border_wait);
+
+                // 3. Reveal Author (Name)
+                const author = card.querySelector('.result-author');
+                if (author) {
+                    author.classList.add('show-author');
+                    audioManager.play('wrong'); // Play exactly when author is shown
+
+                    // Punch: Good Lie (if this is the best lie and condition met)
+                    if (data.punchFlags.isGoodLie && i === data.punchFlags.bestLieIndex) {
+                        setTimeout(() => audioManager.play('good_lie'), 800); // Wait bit after 'wrong'
+                    }
+                }
+                await delay(ANIMATION_CONFIG.lie_author_wait);
+
+                // 4. Show Voters (Avatars)
+                const votersContainer = document.getElementById(`voters-container-${i}`);
+                if (votersContainer) {
+                    const badges = votersContainer.querySelectorAll('.voter-badge');
+                    for (let b = 0; b < badges.length; b++) {
+                        badges[b].style.animation = `badge-pop 0.4s forwards`;
+                        audioManager.play('pop'); // Name Pop
+                        await delay(ANIMATION_CONFIG.lie_voter_stagger);
+                    }
+                }
+
+                // Wait after voters
+                await delay(ANIMATION_CONFIG.lie_post_voters_wait);
+
+                // 5. Un-Spotlight
+                card.classList.remove('reveal-lie-highlight');
+
+                await delay(ANIMATION_CONFIG.next_card_delay); // Pause before next card
+            }
+
+            // 2. Reveal Truth (Spotlight Animation)
+            await delay(ANIMATION_CONFIG.truth_reveal_start_delay);
+
+            const truthIndex = data.options.findIndex(o => o.isReal);
+            if (truthIndex !== -1) {
+                const card = document.getElementById(`result-card-${truthIndex}`);
+                if (card) {
+                    // 1. Spotlight Truth
+                    card.classList.add('reveal-truth-highlight');
+                    await delay(ANIMATION_CONFIG.truth_zoom_duration);
+
+                    // 2. Reveal Status (Green)
+                    card.classList.add('truth-reveal');
+                    audioManager.play('jackpot'); // Truth Sound
+                    socket.emit('host_truth_revealed', { truthIndex: truthIndex });
+
+                    // Removed old TTS logic here as it's now at the start of the sequence.
+                    // if (data.audio) {
+                    //     console.log('Playing Reveal TTS:', data.audio);
+                    //     setTimeout(() => audioManager.playTTS(data.audio), 500);
+                    // } else {
+                    //     console.warn('No audio for reveal');
+                    // }
+
+                    // Punch: All Right (100% Correct)
+                    if (data.punchFlags.isAllRight) {
+                        setTimeout(() => audioManager.play('all_right'), 1000); // After jackpot
+                    }
+                    // Punch: All Wrong (0% Correct) - Triggers on Truth Card if nobody voted for it
+                    if (data.punchFlags.isAllWrong) {
+                        setTimeout(() => audioManager.play('all_wrong'), 1000); // After jackpot (sadly)
+                    }
+
+                    await delay(ANIMATION_CONFIG.truth_border_wait);
+
+                    // 3. Reveal Source (Author)
+                    const author = card.querySelector('.result-author');
+
+                    // --- Show Truth Author ---
+                    if (author) author.classList.add('show-author');
+                    await delay(ANIMATION_CONFIG.truth_author_wait);
+
+                    // --- Show Truth Voters (Avatars) ---
+                    const votersContainer = document.getElementById(`voters-container-${truthIndex}`);
+                    if (votersContainer) {
+                        const badges = votersContainer.querySelectorAll('.voter-badge');
+                        for (let b = 0; b < badges.length; b++) {
+                            badges[b].style.animation = `badge-pop 0.4s forwards`;
+                            audioManager.play('pop');
+                            await delay(ANIMATION_CONFIG.truth_voter_stagger);
+                        }
+                    }
+
+                    await delay(ANIMATION_CONFIG.truth_post_voters_wait);
+
+                    // --- REVEAL SCORES ON SIDEBAR NOW --- 
+                    // This updates the RIGHT COLUMN (Player Slots) to show the Gains
+                    if (roundScoresMap) {
+                        renderPlayerSlots(currentPlayers, roundScoresMap);
+                    }
+
+                    // Unzoom Truth
+                    // card.classList.remove('reveal-truth-highlight'); // Usually we keep truth highlighted or not? logic continues below
+                }
+            }
+            // 3. Finalize: Dim all lies, and Reveal Authors of unvoted lies
+            data.options.forEach((o, idx) => {
+                const c = document.getElementById(`result-card-${idx}`);
+                if (!c) return;
+
+                if (!o.isReal) {
+                    // Dim all lies
+                    c.classList.add('dimmed');
+
+                    // Ensure all lies are "revealed" (red/pink border + author) even if unvoted
+                    if (!c.classList.contains('reveal-lie-revealed')) {
+                        c.classList.add('reveal-lie-revealed');
+                    }
+                    // Keep author visible
+                    const author = c.querySelector('.result-author');
+                    if (author) author.classList.add('show-author');
+                }
+            });
+
+            // Fill Blank in Headline
+            const truthWordSpan = document.querySelector('.truth-word');
+            if (truthWordSpan) {
+                truthWordSpan.style.opacity = '1';
+            }
+
+            await delay(ANIMATION_CONFIG.final_delay);
+
+            // Show Next Button
+            const btn = document.getElementById('next-phase-btn');
+            if (btn) {
+                btn.style.display = 'block';
+                void btn.offsetWidth;
+                btn.style.opacity = '1';
+            }
+        }
+
+        // Voting Phase
+        socket.on('start_voting_display', (data) => {
+            isGameActive = true;
+            gameStatus = 'VOTING'; // Set status to voting
+
+            // Marquee Update
+            const rNum = window.currentRoundNum || 1;
+            const isFinal = (rNum === 4);
+            const winPoints = isFinal ? 20 : 10;
+            const foolPoints = isFinal ? 10 : 5;
+            updateMarquee(`סיבוב ${rNum} - שאלה ${data.step}/3 - ${winPoints} נקודות על תשובה נכונה - ${foolPoints} נקודות על כל מי שתפילו בפח!`);
+
+            factManager.stop();
+
+            if (data.duration) startProgressBar(data.duration);
+
+            submittedPlayers.clear(); // Reset for voting round
+            renderPlayerSlots(currentPlayers); // Render with "Typing" state (hidden avatar, dots)
+
+            const votingGrid = document.createElement('div');
+            votingGrid.className = 'voting-grid';
+
+            data.options.forEach((opt, idx) => {
+                const btn = document.createElement('div');
+                btn.className = 'voting-option';
+                btn.textContent = opt.text;
+                votingGrid.appendChild(btn);
+            });
+
+            setGameContent(`
+                <h2 class="phase-title">הצבעה: שאלה ${data.step}/3</h2>
+                <div id="voting-prompt-container" style="font-size:2rem; font-weight:bold; margin-bottom:20px; min-height: 60px;"></div>
+                <div style="display:flex; justify-content:center; width:100%;">
+                    ${votingGrid.outerHTML}
+                </div>
+            `);
+
+            // Start Typewriter
+            const promptText = data.prompt || data.question; // Fallback
+            // Remove underscores for display if needed, or keep them? User said "Question with [pause]".
+            // If Text has [pause], we split.
+            typeSyncWriter(promptText.replace(/_+/g, '...'), 'voting-prompt-container');
+
+            // Play Question TTS
+            if (data.audio) {
+                console.log('Playing Voting Phase TTS (delayed 500ms for start):', data.audio);
+                setTimeout(() => {
+                    audioManager.playTTS(data.audio);
+                }, 500); // Shorter delay, let text start
+            }
+        });
+
+        function typeSyncWriter(text, elementId) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.innerHTML = '';
+
+            // Check for [pause]
+            const parts = text.split('[pause]');
+            let partIndex = 0;
+            let charIndex = 0;
+
+            function typeChar() {
+                if (partIndex >= parts.length) return;
+
+                const currentPart = parts[partIndex];
+
+                if (charIndex < currentPart.length) {
+                    el.innerHTML += currentPart.charAt(charIndex);
+                    charIndex++;
+                    setTimeout(typeChar, 50); // Typing speed
+                } else {
+                    // Part finished
+                    partIndex++;
+                    charIndex = 0;
+                    if (partIndex < parts.length) {
+                        // Pause before next part
+                        setTimeout(typeChar, 1000); // 1 Second pause (Aligns with approx TTS pause?)
+                    }
+                }
+            }
+            typeChar();
+        }
+
+        socket.on('host_player_voted', (data) => {
+            // data might be player ID or object. If server emits {playerId: ...}
+            // Assuming server emits the player ID or similar. 
+            // If server code isn't modified to emit this, this won't fire.
+            // But we can try to catch 'update_voters_count' if we knew who voted.
+            // Wait, for this to work, SERVER MUST EMIT 'host_player_voted'.
+            // I will assume I need to ADD this to server.js if not present.
+            // For now, let's implement the handler assuming it receives {playerId: "..."}
+            const pid = data.playerId || data; // Handle both obj or string
+            const card = document.getElementById(`card-player-${pid}`);
+            if (card) {
+                submittedPlayers.add(pid);
+                renderPlayerSlots(currentPlayers); // Re-render logic handles styles
+                // card.classList.add('done'); // handled by render
+            }
+        });
+
+        socket.on('show_leaderboard', () => {
+            // Determine Underdogs
+            // We need previous ranks. currentPlayers currently holds updated scores.
+            // But we don't have the OLD list sorted.
+            // Hack: Reconstruct old scores using 'roundScoresMap' or just ... wait.
+            // We updated currentPlayers in 'game_over_results'.
+            // To detect massive jumps, we need to know where they WERE.
+            // Let's assume we can approximate "Bottom Half" using score magnitude? No.
+            // Best way: Store 'previousRank' on player object in game_over_results?
+            // OR: We can just check if they are in top 3 NOW, and their gain was huge?
+            // "Jump from bottom half" implies they were low rank.
+
+            // Let's try to reconstruct old ranks.
+            // We unfortunately don't have the 'gain' here easily unless we stored it.
+            // Let's assume 'previousPlayersMap' (unused line 133) logic or simpler:
+            // Just check if this round they got a LOT of points relative to others?
+            // The prompt requests "Jump from bottom half".
+
+            // Let's do this: calculate ranks based on (score - stored_gain).
+            // But 'show_leaderboard' doesn't receive gain data.
+            // We need to persist the gain or the old rank from 'game_over_results'.
+            // Let's use a global variable `lastRoundGains` or `previousRanks`.
+
+            const sorted = [...currentPlayers].sort((a, b) => b.score - a.score);
+            leaderboardRevealCount++;
+
+            // Check new leader for Underdog (Overtake) condition
+            const newLeader = sorted[0];
+            let underdogId = null;
+
+            if (leaderboardRevealCount >= 2 && lastRoundLeaderId && newLeader.id !== lastRoundLeaderId) {
+                // The leader has changed, and it's not the first round.
+                // Trigger underdog for the new leader.
+                underdogId = newLeader.id;
+            }
+
+            // Update for next time
+            if (newLeader) lastRoundLeaderId = newLeader.id;
+
+            let listHtml = '<div style="width: 60%; display:flex; flex-direction:column; gap:10px;">';
+
+            sorted.forEach((p, i) => {
+                // Check Underdog Condition
+                const isUnderdog = (p.id === underdogId);
+                const gain = p.roundScore || 0;
+
+                // Get Avatar
+                let avatarHtml = '';
+                if (playerAvatarMap[p.id] !== undefined) {
+                    let svg = AVATAR_SVGS[playerAvatarMap[p.id]];
+                    // Replace white stroke with player's color
+                    const pColor = AVATAR_COLORS[i % AVATAR_COLORS.length];
+                    svg = svg.replace(/stroke="white"/g, `stroke="${pColor}"`);
+                    avatarHtml = `<div style="width:50px; height:50px; margin-left:10px;">${svg}</div>`;
+                }
+
+                const delay = i * 0.2;
+                setTimeout(() => {
+                    audioManager.play('whiz');
+                    if (isUnderdog) {
+                        setTimeout(() => audioManager.play('underdog'), 200);
+                    }
+                }, delay * 1000);
+
+                listHtml += `
+                    <div id="leaderboard-item-${p.id}" style="
+                        display:flex; justify-content:space-between; align-items:center;
+                        background:#f9f9f9; padding:15px; border-radius:10px;
+                        font-size:1.5rem; font-weight:bold;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                        opacity:0; transform:translateY(50px);
+                        animation: slide-in-fade 0.5s ease-out forwards ${delay}s;
+                        border-right: 5px solid ${AVATAR_COLORS[i % AVATAR_COLORS.length]};
+                    ">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:2rem; width:40px; text-align:center;">#${i + 1}</span>
+                            ${avatarHtml}
+                            <span style="margin-right:10px;">${p.nickname}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:20px;">
+                             <div style="display:flex; flex-direction:column; align-items:center;">
+                                <span style="font-size:0.9rem; color:#888;">הסיבוב</span>
+                                <span style="color:var(--color-green); font-size:1.5rem;">+${gain}</span>
+                             </div>
+                             <div style="display:flex; flex-direction:column; align-items:center;">
+                                <span style="font-size:0.9rem; color:#888;">סה"כ</span>
+                                <span class="leaderboard-score" data-target="${p.score}" style="color:var(--color-purple); font-size:2rem;">${p.score}</span>
+                             </div>
+                        </div>
+                    </div>
+                 `;
+            });
+            listHtml += '</div>';
+
+            // Add the keyframe style if not exists (it might, but let's ensure)
+            const animStyle = `
+            <style>
+                @keyframes slide-in-fade {
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+            </style>`;
+
+            setGameContent(`
+    ${animStyle}
+                <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
+                    <h2 class="phase-title" style="font-size:3.5rem; margin-bottom:30px;">המובילים!</h2>
+                    ${listHtml}
+                    <div style="margin-top:40px;">
+                        <button class="action-btn pulse-btn" onclick="startRound()">לסיבוב הבא</button>
+                    </div>
+                </div>
+    `);
+
+            // Trigger Rolling Numbers after slight delay (to match staggered entry)
+            setTimeout(() => {
+                const scoreEls = document.querySelectorAll('.leaderboard-score');
+                scoreEls.forEach((el, index) => {
+                    const target = parseInt(el.dataset.target);
+                    // Delay rolling until the card appears approx
+                    // card delay is index * 200ms
+                    // we want roll to start slightly after
+                    setTimeout(() => {
+                        audioManager.play('rolling');
+                        animateValue(el, 0, target, 1500, () => {
+                            // Stop specific rolling? It's a loop.
+                            // We might want to count how many are rolling or just stop when all done?
+                            // Simplest: stop 'rolling' when the LAST one is done.
+                            if (index === scoreEls.length - 1) {
+                                audioManager.stop('rolling');
+                            }
+                        });
+                    }, index * 200 + 300);
+                });
+            }, 100);
+        });
+
+        function nextPhase() {
+            socket.emit('host_next_phase');
+        }
+
+        // --- Confetti Logic ---
+        function startConfetti() {
+            const canvas = document.getElementById('confetti-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particles = [];
+            const colors = ['#FFD700', '#FF0000', '#00FF00', '#0000FF', '#FFFFFF'];
+
+            for (let i = 0; i < 300; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height - canvas.height,
+                    vx: Math.random() * 4 - 2,
+                    vy: Math.random() * 5 + 2,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    size: Math.random() * 10 + 5,
+                    tilt: Math.random() * 10
+                });
+            }
+
+            function animate() {
+                if (!document.getElementById('confetti-canvas')) return; // Stop if removed
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                particles.forEach(p => {
+                    p.y += p.vy;
+                    p.x += p.vx;
+                    p.tilt += 0.1;
+
+                    if (p.y > canvas.height) p.y = -20;
+
+                    ctx.beginPath();
+                    ctx.fillStyle = p.color;
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.tilt);
+                    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                    ctx.restore();
+                });
+
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+    </script>
+</body>
+
+</html>

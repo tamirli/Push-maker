@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>מסך כתיבה - בדיקה</title>
+    <!-- Custom Fonts -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="host-body">
+
+    <div class="header">
+        <div class="header-top-border"></div>
+        <div class="header-content">
+            <div class="logo">פייק מייקר</div>
+            <div></div>
+        </div>
+        <div class="marquee-container">
+            <div class="marquee-content" id="header-marquee">
+                טקסט רץ * טקסט רץ * ברוכים הבאים למשחק * טקסט רץ * טקסט רץ *
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- Right Column -->
+        <div class="col-side" id="col-right">
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-yellow);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 1</div>
+                    <div class="player-role">כתב לענייני חתולים</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-green);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 3</div>
+                    <div class="player-role">כתב לענייני שינה</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-yellow);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 5</div>
+                    <div class="player-role">פרשן לענייני כלום</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Column (Writing Phase) -->
+        <div class="col-center" id="game-stage">
+            <h2 class="phase-title">חדר החדשות</h2>
+            <h3 style="font-size:1.5rem;">הכתבים עובדים על ידיעות חמות...</h3>
+            <div class="lobby-media-placeholder" style="background:transparent; display:flex; font-size:4rem;">
+                ✍️
+            </div>
+            <div id="submission-count" style="font-size:2rem; font-weight:bold;">3 כתבים סיימו</div>
+        </div>
+
+        <!-- Left Column -->
+        <div class="col-side" id="col-left">
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-pink);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 2</div>
+                    <div class="player-role">פרשן בכיר</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-purple);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 4</div>
+                    <div class="player-role">כתב צבאי</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer" style="direction: ltr;">
+        <!-- Simulating an active progress bar (~60%) -->
+        <div class="progress-bar" id="footer-progress" style="width: 60%; transition: none;"></div>
+    </div>
+
+</body>
+
+</html>

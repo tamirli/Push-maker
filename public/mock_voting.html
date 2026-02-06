@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>מסך הצבעה - בדיקה</title>
+    <!-- Custom Fonts -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="host-body">
+
+    <div class="header">
+        <div class="header-top-border"></div>
+        <div class="header-content">
+            <div class="logo">פייק מייקר</div>
+            <div></div>
+        </div>
+        <div class="marquee-container">
+            <div class="marquee-content" id="header-marquee">
+                טקסט רץ * טקסט רץ * ברוכים הבאים למשחק * טקסט רץ * טקסט רץ *
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- Right Column -->
+        <div class="col-side" id="col-right">
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-yellow);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 1</div>
+                    <div class="player-role">כתב לענייני חתולים</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-green);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 3</div>
+                    <div class="player-role">כתב לענייני שינה</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-yellow);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 5</div>
+                    <div class="player-role">פרשן לענייני כלום</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Column (Voting Phase) -->
+        <div class="col-center" id="game-stage">
+            <h2 class="phase-title">הצבעה: שאלה 1/2</h2>
+            <h3 style="margin:0 0 20px 0;">הדבר האהוב על שחקן 1 הוא ____.</h3>
+
+            <div class="voting-grid">
+                <!-- Option 1 -->
+                <div class="voting-option">
+                    <div>"לטייל בים"</div>
+                    <div style="margin-top:10px;">
+                        <!-- Player 2 voted here -->
+                        <span class="voter-badge" style="background-color: var(--color-pink);">שחקן 2</span>
+                    </div>
+                </div>
+
+                <!-- Option 2 -->
+                <div class="voting-option">
+                    <div>"לאכול פיצה"</div>
+                    <div style="margin-top:10px;"></div>
+                </div>
+
+                <!-- Option 3 -->
+                <div class="voting-option">
+                    <div>"לישון כל היום"</div>
+                    <div style="margin-top:10px;">
+                        <!-- Players 3, 5 voted here -->
+                        <span class="voter-badge" style="background-color: var(--color-green);">שחקן 3</span>
+                        <span class="voter-badge" style="background-color: var(--color-yellow);">שחקן 5</span>
+                    </div>
+                </div>
+
+                <!-- Option 4 -->
+                <div class="voting-option">
+                    <div>"לראות טלוויזיה"</div>
+                    <div style="margin-top:10px;">
+                        <span class="voter-badge" style="background-color: var(--color-purple);">שחקן 4</span>
+                    </div>
+                </div>
+
+                <!-- Option 5 - Fake Option -->
+                <div class="voting-option">
+                    <div>"תשובה שקרית 1"</div>
+                    <div style="margin-top:10px;"></div>
+                </div>
+
+                <!-- Option 6 - Fake Option -->
+                <div class="voting-option">
+                    <div>"תשובה שקרית 2"</div>
+                    <div style="margin-top:10px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Left Column -->
+        <div class="col-side" id="col-left">
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-pink);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 2</div>
+                    <div class="player-role">פרשן בכיר</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-purple);"></div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 4</div>
+                    <div class="player-role">כתב צבאי</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer" style="direction: ltr;">
+        <div class="progress-bar" id="footer-progress" style="width: 30%; transition: none;"></div>
+    </div>
+
+</body>
+
+</html>

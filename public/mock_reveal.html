@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>מסך חשיפה - בדיקה</title>
+    <!-- Custom Fonts -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="host-body">
+
+    <div class="header">
+        <div class="header-top-border"></div>
+        <div class="header-content">
+            <div class="logo">פייק מייקר</div>
+            <div></div>
+        </div>
+        <div class="marquee-container">
+            <div class="marquee-content" id="header-marquee">
+                טקסט רץ * טקסט רץ * ברוכים הבאים למשחק * טקסט רץ * טקסט רץ *
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- Right Column with Score Changes -->
+        <div class="col-side" id="col-right">
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-yellow);">
+                    <div class="score-overlay">+50</div>
+                </div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 1</div>
+                    <div class="player-role">כתב לענייני חתולים</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-green);">
+                    <div class="score-overlay">+150</div>
+                </div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 3</div>
+                    <div class="player-role">כתב לענייני שינה</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-yellow);">
+                    <!-- No Score Change -->
+                </div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 5</div>
+                    <div class="player-role">פרשן לענייני כלום</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Column (Reveal Phase) -->
+        <div class="col-center" id="game-stage">
+            <div class="lobby-media-placeholder short"></div>
+
+            <div class="reveal-badge">חשיפה!</div>
+
+            <div class="reveal-headline">
+                הדבר האהוב על שחקן 1 הוא <span style="color:var(--color-pink);">לישון כל היום</span>
+                <div style="font-size:1.2rem; color:#888; font-weight:normal; margin-top:5px;">מתוך: ויקיפדיה</div>
+            </div>
+
+            <div class="results-stack">
+                <!-- Result 1: Fake Option (Author: Player 2) -->
+                <div class="result-card">
+                    <div class="result-card-content">
+                        <div class="result-text">"תשובה שקרית 1"</div>
+                        <div class="result-author">מאת: שחקן 2</div>
+                    </div>
+                    <div class="result-voters">
+                        <span class="voter-badge" style="background-color: var(--color-purple);">שחקן 4</span>
+                    </div>
+                </div>
+
+                <!-- Result 2: Another Fake (Author: Player 4) -->
+                <div class="result-card">
+                    <div class="result-card-content">
+                        <div class="result-text">"תשובה שקרית 2"</div>
+                        <div class="result-author">מאת: שחקן 4</div>
+                    </div>
+                    <div class="result-voters">
+                        <!-- No voters -->
+                    </div>
+                </div>
+
+                <!-- Result 3: TRUTH -->
+                <div class="result-card truth">
+                    <div class="result-card-content">
+                        <div class="result-text">
+                            "לישון כל היום"
+                            <span class="truth-indicator">אמת!</span>
+                        </div>
+                        <div class="result-author">מערכת פייק מייקר</div>
+                    </div>
+                    <div class="result-voters">
+                        <span class="voter-badge" style="background-color: var(--color-green);">שחקן 3</span>
+                        <span class="voter-badge" style="background-color: var(--color-yellow);">שחקן 5</span>
+                    </div>
+                </div>
+
+                <!-- Result 4: Fake Option (Author: Player 3) -->
+                <div class="result-card">
+                    <div class="result-card-content">
+                        <div class="result-text">"לטייל בים"</div>
+                        <div class="result-author">מאת: שחקן 3</div>
+                    </div>
+                    <div class="result-voters">
+                        <span class="voter-badge" style="background-color: var(--color-pink);">שחקן 2</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <button class="action-btn">לשאלה הבאה</button>
+        </div>
+
+        <!-- Left Column -->
+        <div class="col-side" id="col-left">
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-pink);">
+                    <div class="score-overlay">+100</div>
+                </div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 2</div>
+                    <div class="player-role">פרשן בכיר</div>
+                </div>
+            </div>
+            <div class="player-card">
+                <div class="player-avatar" style="background-color: var(--color-purple);">
+                    <div class="score-overlay">+0</div>
+                </div>
+                <div class="player-info">
+                    <div class="player-name">שחקן 4</div>
+                    <div class="player-role">כתב צבאי</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <!-- Bar stopped -->
+        <div class="progress-bar" id="footer-progress" style="width: 100%; transition: none;"></div>
+    </div>
+
+</body>
+
+</html>

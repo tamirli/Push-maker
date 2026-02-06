@@ -1,0 +1,30 @@
+/* --- Intro Refinements --- */
+
+/* Ensure text on input is correct */
+.mobile-input {
+    text-align: right;
+}
+
+/* Red reveal for lies in intro */
+.lie-reveal-intro {
+    background-color: #FFD6D6 !important;
+    border-color: var(--color-pink) !important;
+}
+
+/* Mock Phone adjustments */
+.mock-phone {
+    overflow: hidden;
+    /* Clip inner content */
+}
+
+/* Ensure Logo Pop is on top and visible */
+.intro-logo-pop {
+    z-index: 100;
+}
+
+/* Green Truth Word in Headline */
+.truth-word-highlight {
+    color: var(--color-green);
+    font-weight: 900;
+    text-shadow: 0 0 5px rgba(51, 115, 87, 0.4);
+}
