@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>פוש מייקר - דף הבית</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #111;
+            color: white;
+            font-family: 'Rubik', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #222 0%, #000 100%);
+        }
+
+        .landing-container {
+            text-align: center;
+            z-index: 10;
+            animation: fadeIn 1s ease-out;
+        }
+
+        h1 {
+            font-size: 4rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(45deg, #ffcc00, #ff6699);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(255, 204, 0, 0.3);
+        }
+
+        p {
+            font-size: 1.5rem;
+            color: #ccc;
+            margin-bottom: 3rem;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .landing-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            padding: 20px 40px;
+            color: white;
+            text-decoration: none;
+            font-size: 1.5rem;
+            border-radius: 15px;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 200px;
+        }
+
+        .landing-btn:hover {
+            transform: translateY(-5px) scale(1.05);
+            background: rgba(255, 255, 255, 0.2);
+            border-color: white;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .landing-btn span.icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        .landing-btn.host {
+            border-color: #ffcc00;
+            color: #ffcc00;
+        }
+
+        .landing-btn.host:hover {
+            background: rgba(255, 204, 0, 0.2);
+            box-shadow: 0 0 30px rgba(255, 204, 0, 0.4);
+        }
+
+        .landing-btn.join {
+            border-color: #ff6699;
+            color: #ff6699;
+        }
+
+        .landing-btn.join:hover {
+            background: rgba(255, 102, 153, 0.2);
+            box-shadow: 0 0 30px rgba(255, 102, 153, 0.4);
+        }
+
+        /* Background Animation */
+        .bg-shape {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            z-index: 1;
+            animation: float 20s infinite alternate;
+        }
+
+        .shape-1 {
+            top: -10%;
+            left: -10%;
+            width: 50vw;
+            height: 50vw;
+            background: #ffcc00;
+            animation-delay: 0s;
+        }
+
+        .shape-2 {
+            bottom: -10%;
+            right: -10%;
+            width: 60vw;
+            height: 60vw;
+            background: #ff6699;
+            animation-delay: -10s;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translate(0, 0);
+            }
+
+            100% {
+                transform: translate(30px, 50px);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Mobile specific adjustments */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 3rem;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            .landing-btn {
+                width: 80vw;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="bg-shape shape-1"></div>
+    <div class="bg-shape shape-2"></div>
+
+    <div class="landing-container">
+        <h1>פוש מייקר</h1>
+        <p>בחרו איך תרצו להצטרף:</p>
+
+        <div class="btn-group">
+            <a href="host.html" class="landing-btn host">
+                <span class="icon">🖥️</span>
+                <span>מנחה משחק</span>
+                <span style="font-size: 0.9rem; opacity: 0.8; margin-top: 5px;">(למסך גדול)</span>
+            </a>
+
+            <a href="mobile.html" class="landing-btn join">
+                <span class="icon">📱</span>
+                <span>שחקן</span>
+                <span style="font-size: 0.9rem; opacity: 0.8; margin-top: 5px;">(לסמארטפון)</span>
+            </a>
+        </div>
+    </div>
+
+</body>
+
+</html>

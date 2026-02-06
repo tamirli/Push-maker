@@ -61,7 +61,7 @@
 
     <script>
         const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-        const socketUrl = isLocal ? "http://localhost:3000" : "https://[YOUR-RENDER-APP-NAME].onrender.com"; // User instructions: Replace with actual Render URL
+        const socketUrl = isLocal ? "http://localhost:3000" : "https://push-maker.onrender.com"; // User instructions: Replace with actual Render URL
         const socket = io(socketUrl);
         let myGender = 'neutral';
         let myVoteIndex = -1;
