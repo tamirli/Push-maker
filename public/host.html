@@ -523,8 +523,9 @@
             if (isLocal) {
                 url = `http://${data.ip}:${data.port}/mobile.html`;
             } else {
-                // On Render (or other host), use the current origin
-                url = `${window.location.origin}/mobile.html`;
+                // FORCE Render URL for players. Itch.io URLs are ugly/iframe-based.
+                // This ensures players get a clean link to the mobile site hosted on Render.
+                url = "https://push-maker.onrender.com/mobile.html";
             }
 
             const displayEl = document.getElementById('join-url-display');
